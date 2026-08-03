@@ -1,0 +1,16 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "api-gateway",
+    "auth-service",
+    "user-service",
+    "product-service",
+    "inventory-service",
+    "order-service",
+    "payment-service",
+    "notification-service",
+    "shared"
+  ]
+}
