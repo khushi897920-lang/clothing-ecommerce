@@ -1,0 +1,51 @@
+product_id,sku,gender,category,sub_type,color,pattern,fit,available_sizes,image_filename,image_path,product_name,price_inr,stock_quantity,is_active
+1,M-ACTI-0001,Men,Activewear,Tank Top,Black,Solid,Regular,"S,M,L,XL,XXL",M-ACTI-0001.jpg,images/M-ACTI-0001.jpg,Black Men's Tank Top,1140,50,TRUE
+2,M-ACTI-0002,Men,Activewear,Shorts,White,Solid,Regular,"S,M,L,XL,XXL",M-ACTI-0002.jpg,images/M-ACTI-0002.jpg,White Men's Shorts,1120,50,TRUE
+3,M-OUTE-0003,Men,Outerwear,Overshirt,Beige,Solid,Regular,"S,M,L,XL,XXL",M-OUTE-0003.jpg,images/M-OUTE-0003.jpg,Beige Men's Overshirt,2010,50,TRUE
+4,M-OUTE-0004,Men,Outerwear,Jacket,Blue,Graphic,Regular,"S,M,L,XL,XXL",M-OUTE-0004.jpg,images/M-OUTE-0004.jpg,Blue Men's Jacket,3180,50,TRUE
+5,M-OUTE-0005,Men,Outerwear,Jacket,Brown,Solid,Regular,"S,M,L,XL,XXL",M-OUTE-0005.jpg,images/M-OUTE-0005.jpg,Brown Men's Jacket,2080,50,TRUE
+6,M-OVER-0006,Men,Oversized Tshirts,Tshirts,Purple,Striped,Oversized,"S,M,L,XL,XXL",M-OVER-0006.jpg,images/M-OVER-0006.jpg,Purple Men's Oversized Tshirt,790,50,TRUE
+7,M-OVER-0007,Men,Oversized Tshirts,Tshirts,Beige,Solid,Oversized,"S,M,L,XL,XXL",M-OVER-0007.jpg,images/M-OVER-0007.jpg,Beige Men's Oversized Tshirt,890,50,TRUE
+8,M-OVER-0008,Men,Oversized Tshirts,Tshirts,Pink,Tie-Dye,Oversized,"S,M,L,XL,XXL",M-OVER-0008.jpg,images/M-OVER-0008.jpg,Pink Men's Oversized Tshirt,740,50,TRUE
+9,M-OVER-0009,Men,Oversized Tshirts,Tshirts,Pink,Graphic,Oversized,"S,M,L,XL,XXL",M-OVER-0009.jpg,images/M-OVER-0009.jpg,Pink Men's Oversized Tshirt,610,50,TRUE
+10,M-OVER-0010,Men,Oversized Tshirts,Tshirts,Black,Graphic,Oversized,"S,M,L,XL,XXL",M-OVER-0010.jpg,images/M-OVER-0010.jpg,Black Men's Oversized Tshirt,800,50,TRUE
+11,M-OVER-0011,Men,Oversized Tshirts,Tshirts,Black,Graphic,Oversized,"S,M,L,XL,XXL",M-OVER-0011.jpg,images/M-OVER-0011.jpg,Black Men's Oversized Tshirt,620,50,TRUE
+12,M-OVER-0012,Men,Oversized Tshirts,Tshirts,Grey,Tie-Dye,Oversized,"S,M,L,XL,XXL",M-OVER-0012.jpg,images/M-OVER-0012.jpg,Grey Men's Oversized Tshirt,780,50,TRUE
+13,M-OVER-0013,Men,Oversized Tshirts,Tshirts,Grey,Solid,Oversized,"S,M,L,XL,XXL",M-OVER-0013.jpg,images/M-OVER-0013.jpg,Grey Men's Oversized Tshirt,720,50,TRUE
+14,M-PANT-0014,Men,Pants,Trousers,Grey,Solid,Wide-Leg,"S,M,L,XL,XXL",M-PANT-0014.jpg,images/M-PANT-0014.jpg,Grey Men's Trousers,1580,50,TRUE
+15,M-PANT-0015,Men,Pants,Trousers,Blue,Solid,Wide-Leg,"S,M,L,XL,XXL",M-PANT-0015.jpg,images/M-PANT-0015.jpg,Blue Men's Trousers,1450,50,TRUE
+16,M-PANT-0016,Men,Pants,Trousers,Green,Solid,Wide-Leg,"S,M,L,XL,XXL",M-PANT-0016.jpg,images/M-PANT-0016.jpg,Green Men's Trousers,1770,50,TRUE
+17,M-PANT-0017,Men,Pants,Trousers,Brown,Solid,Wide-Leg,"S,M,L,XL,XXL",M-PANT-0017.jpg,images/M-PANT-0017.jpg,Brown Men's Trousers,1580,50,TRUE
+18,M-PANT-0018,Men,Pants,Trousers,White,Solid,Wide-Leg,"S,M,L,XL,XXL",M-PANT-0018.jpg,images/M-PANT-0018.jpg,White Men's Trousers,1240,50,TRUE
+19,M-PANT-0019,Men,Pants,Trousers,Grey,Solid,Regular,"S,M,L,XL,XXL",M-PANT-0019.jpg,images/M-PANT-0019.jpg,Grey Men's Trousers,1800,50,TRUE
+20,M-SHIR-0020,Men,Shirts,Shirt,Red,Plaid,Regular,"S,M,L,XL,XXL",M-SHIR-0020.jpg,images/M-SHIR-0020.jpg,Red Men's Shirt,1790,50,TRUE
+21,M-SHIR-0021,Men,Shirts,Shirt,Blue,Solid,Regular,"S,M,L,XL,XXL",M-SHIR-0021.jpg,images/M-SHIR-0021.jpg,Blue Men's Shirt,900,50,TRUE
+22,M-SHIR-0022,Men,Shirts,Shirt,Blue,Solid,Regular,"S,M,L,XL,XXL",M-SHIR-0022.jpg,images/M-SHIR-0022.jpg,Blue Men's Shirt,1110,50,TRUE
+23,M-SHIR-0023,Men,Shirts,Shirt,Brown,Solid,Regular,"S,M,L,XL,XXL",M-SHIR-0023.jpg,images/M-SHIR-0023.jpg,Brown Men's Shirt,1360,50,TRUE
+24,M-SHIR-0024,Men,Shirts,Shirt,Black,Solid,Regular,"S,M,L,XL,XXL",M-SHIR-0024.jpg,images/M-SHIR-0024.jpg,Black Men's Shirt,1230,50,TRUE
+25,M-SHIR-0025,Men,Shirts,Shirt,White,Solid,Regular,"S,M,L,XL,XXL",M-SHIR-0025.jpg,images/M-SHIR-0025.jpg,White Men's Shirt,1520,50,TRUE
+26,W-BOTT-0026,Women,Bottomwear,Jeans,Blue,Solid,Wide-Leg,"S,M,L,XL,XXL",W-BOTT-0026.jpg,images/W-BOTT-0026.jpg,Blue Women's Jeans,1750,50,TRUE
+27,W-BOTT-0027,Women,Bottomwear,Skirt,Blue,Solid,Regular,"S,M,L,XL,XXL",W-BOTT-0027.jpg,images/W-BOTT-0027.jpg,Blue Women's Skirt,1840,50,TRUE
+28,W-BOTT-0028,Women,Bottomwear,Jeans,Blue,Solid,Flared,"S,M,L,XL,XXL",W-BOTT-0028.jpg,images/W-BOTT-0028.jpg,Blue Women's Jeans,1030,50,TRUE
+29,W-BOTT-0029,Women,Bottomwear,Trousers,Blue,Solid,Wide-Leg,"S,M,L,XL,XXL",W-BOTT-0029.jpg,images/W-BOTT-0029.jpg,Blue Women's Trousers,1060,50,TRUE
+30,W-BOTT-0030,Women,Bottomwear,Jeans,Blue,Solid,Wide-Leg,"S,M,L,XL,XXL",W-BOTT-0030.jpg,images/W-BOTT-0030.jpg,Blue Women's Jeans,1400,50,TRUE
+31,W-BOTT-0031,Women,Bottomwear,Trousers,White,Solid,Wide-Leg,"S,M,L,XL,XXL",W-BOTT-0031.jpg,images/W-BOTT-0031.jpg,White Women's Trousers,1470,50,TRUE
+32,W-CO-O-0032,Women,Co-ord,Co-ord Set,Beige,Solid,Regular,"S,M,L,XL,XXL",W-CO-O-0032.jpg,images/W-CO-O-0032.jpg,Beige Women's Co-ord Set,2520,50,TRUE
+33,W-CO-O-0033,Women,Co-ord,Co-ord Set,Pink,Solid,Regular,"S,M,L,XL,XXL",W-CO-O-0033.jpg,images/W-CO-O-0033.jpg,Pink Women's Co-ord Set,2740,50,TRUE
+34,W-DRES-0034,Women,Dresses,Dress,Blue,Floral,Regular,"S,M,L,XL,XXL",W-DRES-0034.jpg,images/W-DRES-0034.jpg,Blue Women's Dress,2540,50,TRUE
+35,W-DRES-0035,Women,Dresses,Dress,Black,Solid,Regular,"S,M,L,XL,XXL",W-DRES-0035.jpg,images/W-DRES-0035.jpg,Black Women's Dress,1570,50,TRUE
+36,W-DRES-0036,Women,Dresses,Dress,Blue,Solid,Regular,"S,M,L,XL,XXL",W-DRES-0036.jpg,images/W-DRES-0036.jpg,Blue Women's Dress,1660,50,TRUE
+37,W-DRES-0037,Women,Dresses,Dress,Brown,Solid,Regular,"S,M,L,XL,XXL",W-DRES-0037.jpg,images/W-DRES-0037.jpg,Brown Women's Dress,2220,50,TRUE
+38,W-DRES-0038,Women,Dresses,Dress,White,Floral,Regular,"S,M,L,XL,XXL",W-DRES-0038.jpg,images/W-DRES-0038.jpg,White Women's Dress,2000,50,TRUE
+39,W-DRES-0039,Women,Dresses,Dress,Red,Solid,Regular,"S,M,L,XL,XXL",W-DRES-0039.jpg,images/W-DRES-0039.jpg,Red Women's Dress,1700,50,TRUE
+40,W-JACK-0040,Women,Jacket,Jacket,White,Colorblock,Cropped,"S,M,L,XL,XXL",W-JACK-0040.jpg,images/W-JACK-0040.jpg,White Women's Jacket,2540,50,TRUE
+41,W-JACK-0041,Women,Jacket,Jacket,Brown,Solid,Regular,"S,M,L,XL,XXL",W-JACK-0041.jpg,images/W-JACK-0041.jpg,Brown Women's Jacket,2060,50,TRUE
+42,W-JACK-0042,Women,Jacket,Jacket,Blue,Graphic,Regular,"S,M,L,XL,XXL",W-JACK-0042.jpg,images/W-JACK-0042.jpg,Blue Women's Jacket,2250,50,TRUE
+43,W-SHIR-0043,Women,Shirts,Cami Top,Red,Printed,Regular,"S,M,L,XL,XXL",W-SHIR-0043.jpg,images/W-SHIR-0043.jpg,Red Women's Cami Top,1710,50,TRUE
+44,W-SHIR-0044,Women,Shirts,Vest Top,Blue,Printed,Regular,"S,M,L,XL,XXL",W-SHIR-0044.jpg,images/W-SHIR-0044.jpg,Blue Women's Vest Top,1390,50,TRUE
+45,W-SHIR-0045,Women,Shirts,Crop Top,Green,Graphic,Cropped,"S,M,L,XL,XXL",W-SHIR-0045.jpg,images/W-SHIR-0045.jpg,Green Women's Crop Top,1140,50,TRUE
+46,W-SHIR-0046,Women,Shirts,Sweater Vest,Beige,Argyle,Regular,"S,M,L,XL,XXL",W-SHIR-0046.jpg,images/W-SHIR-0046.jpg,Beige Women's Sweater Vest,930,50,TRUE
+47,W-SHIR-0047,Women,Shirts,Polo Top,White,Solid,Regular,"S,M,L,XL,XXL",W-SHIR-0047.jpg,images/W-SHIR-0047.jpg,White Women's Polo Top,1520,50,TRUE
+48,W-SHIR-0048,Women,Shirts,Sweater Vest,Beige,Solid,Regular,"S,M,L,XL,XXL",W-SHIR-0048.jpg,images/W-SHIR-0048.jpg,Beige Women's Sweater Vest,950,50,TRUE
+49,W-SHIR-0049,Women,Shirts,Top,Black,Solid,Slim,"S,M,L,XL,XXL",W-SHIR-0049.jpg,images/W-SHIR-0049.jpg,Black Women's Top,1240,50,TRUE
+50,W-SHIR-0050,Women,Shirts,Polo Top,Blue,Colorblock,Regular,"S,M,L,XL,XXL",W-SHIR-0050.jpg,images/W-SHIR-0050.jpg,Blue Women's Polo Top,1060,50,TRUE
