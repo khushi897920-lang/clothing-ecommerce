@@ -1,2 +1,31 @@
-import React from 'react';
-export default function Page() { return <div className="p-8"><h1 className="text-2xl font-bold">Admin Product Management</h1></div>; }
+import React from "react";
+import AdminLayout from "@/components/admin/AdminLayout";
+import ProductsTable from "@/components/admin/ProductsTable";
+import Link from "next/link";
+
+export default function ProductsPage() {
+  return (
+    <AdminLayout>
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+        <div>
+          <h1 className="text-[36px] md:text-[42px] font-serif font-bold text-[#2d2a26] leading-none mb-2">
+            Products
+          </h1>
+          <p className="text-[14px] text-[#6b6762]">
+            Manage and update your store products.
+          </p>
+        </div>
+        
+        <Link 
+          href="/admin/products/new"
+          className="flex items-center space-x-2 bg-[#B48C5A] hover:bg-[#967448] transition-colors text-white rounded-lg px-6 py-2.5 text-[13px] font-medium self-start md:self-auto shadow-sm"
+        >
+          <span className="material-symbols-outlined text-[18px]">add</span>
+          <span>Add Product</span>
+        </Link>
+      </div>
+      
+      <ProductsTable />
+    </AdminLayout>
+  );
+}
