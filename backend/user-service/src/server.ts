@@ -1,5 +1,7 @@
 import app from './app';
-const PORT = process.env.PORT || 5002;
+
+const PORT = process.env.PORT || 4002;
+
 app.listen(PORT, () => {
-  console.log(`User Service is running on port ${PORT}`);
+  console.log(`[User Service] Running on port ${PORT}`);
 });
