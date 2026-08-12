@@ -1,7 +1,16 @@
+// import { PrismaClient } from "@prisma/client";
+
+// const prisma = new PrismaClient();
+
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL!,
+});
 
+const prisma = new PrismaClient({ adapter });
 // Seeds the clothing catalogue from dataset/products.csv (50 products).
 // Uses upsert everywhere, so this is safe to re-run without creating duplicates
 // or violating the composite-unique / partial-unique constraints in the DB.
