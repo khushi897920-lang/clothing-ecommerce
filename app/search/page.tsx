@@ -18,7 +18,8 @@ import {
   ShieldCheck,
   SearchX,
 } from "lucide-react";
-import { catalogProducts, CatalogProduct } from "@/data/catalogProducts";
+import { CatalogProduct } from "@/data/catalogProducts";
+import { productApi, userApi, mapBackendProduct } from "@/lib/apiClient";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
@@ -53,21 +54,15 @@ const COLORS = [
 ];
 
 function SearchContent() {
-  const searchParams = useSearchParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("q") || "";
 
-  // Search Query State (default to "linen shirt" if empty for preview, or from URL)
-  const initialQuery = searchParams.get("q") || "linen shirt";
-  const [searchQuery, setSearchQuery] = useState<string>(initialQuery);
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
+  const [searchInput, setSearchInput] = useState<string>(initialQuery);
   const [activeQuery, setActiveQuery] = useState<string>(initialQuery);
-
-  useEffect(() => {
-    const q = searchParams.get("q");
-    if (q !== null) {
-      setSearchQuery(q);
-      setActiveQuery(q);
-    }
-  }, [searchParams]);
 
   // Filter States
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -75,7 +70,7 @@ function SearchContent() {
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [minPrice, setMinPrice] = useState<number>(10);
-  const [maxPrice, setMaxPrice] = useState<number>(200);
+  const [maxPrice, setMaxPrice] = useState<number>(5000);
 
   // UI States
   const [sortBy, setSortBy] = useState<string>("relevance");
@@ -93,28 +88,105 @@ function SearchContent() {
     price: true,
   });
 
+  // Fetch wishlist on mount
+  useEffect(() => {
+    userApi.getWishlist().then(({ data }) => {
+      const list = data?.wishlist || data?.items;
+      if (list && Array.isArray(list)) {
+        setWishlist(list.map((w: any) => w.productId || w.product?.id));
+      } else {
+        setWishlist([]);
+      }
+    });
+  }, []);
+
+  // Fetch real products from API Gateway on filter changes
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+
+    const params: Record<string, string | number> = {};
+
+    if (selectedCategories.length > 0) {
+      params.category = selectedCategories[0];
+    }
+    if (selectedGenders.length > 0) {
+      params.audience = selectedGenders[0].toUpperCase();
+    }
+    if (selectedSizes.length > 0) {
+      params.size = selectedSizes[0];
+    }
+    if (selectedColors.length > 0) {
+      params.color = selectedColors[0];
+    }
+    if (maxPrice && maxPrice < 5000) {
+      params.maxPrice = maxPrice;
+    }
+    if (activeQuery.trim()) {
+      params.q = activeQuery.trim();
+    }
+    if (sortBy) {
+      if (sortBy === "price-low-high" || sortBy === "low-high") params.sort = "price_asc";
+      else if (sortBy === "price-high-low" || sortBy === "high-low") params.sort = "price_desc";
+      else if (sortBy === "newest") params.sort = "createdAt_desc";
+      else params.sort = sortBy;
+    }
+
+    productApi.getCatalog(params).then(({ data, error: apiError }) => {
+      if (!active) return;
+      if (apiError) {
+        setError(apiError);
+        setProducts([]);
+      } else if (data?.products) {
+        setProducts(data.products.map(mapBackendProduct));
+      } else {
+        setProducts([]);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [activeQuery, selectedCategories, selectedGenders, selectedSizes, selectedColors, maxPrice, sortBy]);
+
+  // Synchronize URL query changes to activeQuery state
+  useEffect(() => {
+    const q = searchParams.get("q") || "";
+    setSearchInput(q);
+    setActiveQuery(q);
+  }, [searchParams]);
+
   const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const toggleWishlist = (productId: string, e: React.MouseEvent) => {
+  const toggleWishlist = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setWishlist((prev) =>
-      prev.includes(productId)
-        ? prev.filter((id) => id !== productId)
-        : [...prev, productId]
-    );
+    if (wishlist.includes(id)) {
+      setWishlist((prev) => prev.filter((item) => item !== id));
+      userApi.removeFromWishlist(id).then(() => {
+        window.dispatchEvent(new Event("yugen-state-updated"));
+      });
+    } else {
+      setWishlist((prev) => [...prev, id]);
+      userApi.addToWishlist(id).then(() => {
+        window.dispatchEvent(new Event("yugen-state-updated"));
+      });
+    }
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setActiveQuery(searchQuery);
-    router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    if (!searchInput.trim()) return;
+    setActiveQuery(searchInput.trim());
+    router.push(`/search?q=${encodeURIComponent(searchInput.trim())}`);
   };
 
   const handleClearSearch = () => {
-    setSearchQuery("");
+    setSearchInput("");
     setActiveQuery("");
     router.push("/search");
   };
@@ -131,12 +203,12 @@ function SearchContent() {
   // Search Results Matching Algorithm against dataset
   const searchResults = useMemo(() => {
     if (!activeQuery.trim()) {
-      return catalogProducts;
+      return products;
     }
     const q = activeQuery.toLowerCase().trim();
     const queryTerms = q.split(/\s+/);
 
-    return catalogProducts.filter((product) => {
+    return products.filter((product) => {
       const name = product.name.toLowerCase();
       const cat = product.category.toLowerCase();
       const sub = product.subType.toLowerCase();
@@ -152,7 +224,7 @@ function SearchContent() {
         fullString.includes(q) ||
         (q.includes("linen") && (name.includes("shirt") || name.includes("tshirt") || cat.includes("shirt")));
     });
-  }, [activeQuery]);
+  }, [products, activeQuery]);
 
   // Apply Sidebar Filters
   const filteredProducts = useMemo(() => {
@@ -185,7 +257,7 @@ function SearchContent() {
       // Color
       if (
         selectedColors.length > 0 &&
-        !selectedColors.includes(product.color)
+        !(product.colors || []).some((col: string) => selectedColors.includes(col))
       ) {
         return false;
       }
@@ -517,7 +589,7 @@ function SearchContent() {
                       value={minPrice}
                       onChange={(e) => setMinPrice(Number(e.target.value))}
                       className="w-full bg-[#FBFAF6] border border-[#463627]/20 rounded p-1.5 text-center text-[11px]"
-                      placeholder="$ Min"
+                      placeholder="₹ Min"
                     />
                     <span className="text-[#756A5E]">-</span>
                     <input
@@ -525,13 +597,14 @@ function SearchContent() {
                       value={maxPrice}
                       onChange={(e) => setMaxPrice(Number(e.target.value))}
                       className="w-full bg-[#FBFAF6] border border-[#463627]/20 rounded p-1.5 text-center text-[11px]"
-                      placeholder="$ Max"
+                      placeholder="₹ Max"
                     />
                   </div>
                   <input
                     type="range"
-                    min="10"
-                    max="200"
+                    min="500"
+                    max="5000"
+                    step="50"
                     value={maxPrice}
                     onChange={(e) => setMaxPrice(Number(e.target.value))}
                     className="w-full accent-[#6B4A37] cursor-pointer"
@@ -550,7 +623,27 @@ function SearchContent() {
 
           {/* Right Product Grid OR Empty State */}
           <div className="lg:col-span-3">
-            {paginatedProducts.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-20 bg-[#FBFAF6] rounded-xl border border-[#463627]/12 p-8 flex flex-col items-center justify-center">
+                <SearchIcon className="w-8 h-8 text-[#6B4A37] animate-spin mb-4" />
+                <p className="text-sm font-medium text-[#756A5E]">Searching products catalog...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-20 bg-[#FBFAF6] rounded-xl border border-[#463627]/12 p-8">
+                <p className="text-2xl font-normal text-red-700 mb-2 uppercase" style={{ fontFamily: '"Poiret One", sans-serif' }}>
+                  Error loading catalog
+                </p>
+                <p className="text-[12px] text-[#756A5E] mb-6">{error}</p>
+                <button
+                  onClick={() => {
+                    setMaxPrice((p) => p + 0.001);
+                  }}
+                  className="bg-[#25211D] text-white text-[11px] px-6 py-2.5 rounded-full font-medium uppercase tracking-wider"
+                >
+                  Retry Fetch
+                </button>
+              </div>
+            ) : paginatedProducts.length === 0 ? (
               /* 3. Exact "No results found for xyz" Empty State Card */
               <div className="bg-[#FBFAF6] rounded-2xl border border-[#463627]/12 p-8 lg:p-14 flex flex-col md:flex-row items-center gap-8 shadow-xs">
                 {/* Search Illustration Box */}
@@ -649,12 +742,12 @@ function SearchContent() {
                           {product.gender}
                         </p>
                         <p className="!text-[11px] !text-[#25211D] mb-3">
-                          {product.formattedPrice}
+                          {product.price || product.formattedPrice}
                         </p>
 
-                        {/* Color swatches */}
+                        {/* Color swatches — derived from real variant colors */}
                         <div className="swatches">
-                          {product.swatches.map((hex, idx) => (
+                          {(product.swatches || []).map((hex, idx) => (
                             <span
                               key={idx}
                               style={{ backgroundColor: hex }}

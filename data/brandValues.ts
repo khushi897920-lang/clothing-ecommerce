@@ -1,24 +1,19 @@
-import { HandHeart, Leaf, Package, Workflow } from "lucide-react";
+import { ShieldCheck, Leaf, Scissors } from "lucide-react";
 
 export const brandValues = [
   {
-    title: "Sustainable",
-    lines: ["Eco-friendly fabrics", "Better for the planet."],
+    icon: ShieldCheck,
+    title: "Quiet Luxury",
+    lines: ["Sartorial precision", "and high-end fabric."],
+  },
+  {
     icon: Leaf,
+    title: "Conscious Craft",
+    lines: ["Ethical sourcing", "and zero waste."],
   },
   {
-    title: "Timeless Design",
-    lines: ["Minimal. Elegant.", "Made to last."],
-    icon: Workflow,
-  },
-  {
-    title: "Crafted With Care",
-    lines: ["Thoughtful details in", "every piece."],
-    icon: HandHeart,
-  },
-  {
-    title: "Worldwide Shipping",
-    lines: ["Delivering elegance", "to your door."],
-    icon: Package,
+    icon: Scissors,
+    title: "Impeccable Fit",
+    lines: ["Tailored specifically", "for your comfort."],
   },
 ];

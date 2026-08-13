@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Modal from "./Modal";
+import { paymentApi } from "@/lib/apiClient";
 
 type PaymentStatus = "Paid" | "Pending" | "Refunded";
 type PaymentMethodName = "Visa" | "Mastercard" | "UPI";
@@ -143,6 +144,27 @@ export default function PaymentsTable() {
   const [refundPayment, setRefundPayment] = useState<PaymentItem | null>(null);
 
   useEffect(() => {
+    paymentApi.getAdminPayments().then(({ data }) => {
+      if (data?.payments && data.payments.length > 0) {
+        setPayments(
+          data.payments.map((p: any) => ({
+            id: p.id,
+            transactionId: p.stripePaymentIntentId || p.transactionId || `txn_${p.id.slice(0, 10)}`,
+            orderId: `#${(p.orderId || p.id).slice(0, 8)}`,
+            customer: { name: p.order?.user?.firstName || "Customer", email: p.order?.user?.email || "customer@email.com", avatarColor: "#b27a5d" },
+            amount: `₹${parseFloat(p.amount || "0").toFixed(0)}`,
+            paymentMethod: "Visa",
+            paymentType: "Card",
+            status: p.status === "COMPLETED" || p.status === "PAID" ? "Paid" : p.status === "REFUNDED" ? "Refunded" : "Pending",
+            date: new Date(p.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            time: "10:00 AM",
+          }))
+        );
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (statusRef.current && !statusRef.current.contains(event.target as Node)) {
         setShowStatusDropdown(false);
@@ -154,6 +176,14 @@ export default function PaymentsTable() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const confirmRefund = async () => {
+    if (refundPayment) {
+      setPayments(payments.map(p => p.id === refundPayment.id ? { ...p, status: "Refunded" } : p));
+      await paymentApi.refundPayment(refundPayment.id);
+      setRefundPayment(null);
+    }
+  };
 
   const getStatusBadge = (status: PaymentStatus) => {
     switch (status) {
@@ -205,15 +235,6 @@ export default function PaymentsTable() {
   useEffect(() => {
     setActivePage(1);
   }, [searchQuery, selectedStatus, selectedMethod]);
-
-  const confirmRefund = () => {
-    if (refundPayment) {
-      setPayments(payments.map(p => 
-        p.id === refundPayment.id ? { ...p, status: "Refunded" } : p
-      ));
-      setRefundPayment(null);
-    }
-  };
 
   return (
     <>

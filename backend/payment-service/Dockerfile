@@ -1,6 +1,8 @@
-FROM node:18-alpine
+FROM node:20-alpine
 WORKDIR /app
-COPY package.json ./
-RUN npm install
-COPY . .
-CMD ["npm", "start"]
+COPY backend/package.json ./backend/package.json
+COPY database ./database
+RUN cd backend && npm install
+COPY backend ./backend
+WORKDIR /app/backend
+CMD ["npx", "ts-node", "payment-service/src/server.ts"]

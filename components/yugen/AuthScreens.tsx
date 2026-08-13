@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import React, { useState, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Leaf, Loader2, Lock, Mail, UserRound, ShieldCheck } from "lucide-react";
 import { authApi } from "@/lib/apiClient";
@@ -100,6 +100,9 @@ function Divider() {
 
 export function SignInScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -133,28 +136,17 @@ export function SignInScreen() {
         localStorage.setItem("yugen_token", data.accessToken);
         localStorage.setItem("yugen_user", JSON.stringify(data.user));
 
-        const targetRoute = data.redirectTo || (data.user?.role === "ADMIN" ? "/admin/dashboard" : "/profile");
+        const targetRoute = redirectParam || data.redirectTo || (data.user?.role === "ADMIN" ? "/admin/dashboard" : "/profile");
         setSuccess(`Signed in successfully! Redirecting...`);
 
         setTimeout(() => {
           router.push(targetRoute);
         }, 800);
       } else {
-        // Fallback for development mode
-        const isAdmin = email.toLowerCase().includes("admin");
-        const targetRoute = isAdmin ? "/admin/dashboard" : "/profile";
-        setSuccess(`Welcome back! Redirecting...`);
-
-        setTimeout(() => {
-          router.push(targetRoute);
-        }, 800);
+        setError(apiError || "Failed to sign in. Please check your credentials.");
       }
-    } catch (err) {
-      const isAdmin = email.toLowerCase().includes("admin");
-      setSuccess("Signed in successfully!");
-      setTimeout(() => {
-        router.push(isAdmin ? "/admin/dashboard" : "/profile");
-      }, 800);
+    } catch (err: any) {
+      setError(err?.message || "An error occurred while signing in.");
     } finally {
       setLoading(false);
     }
@@ -162,7 +154,7 @@ export function SignInScreen() {
 
   const handleQuickAdminFill = () => {
     setEmail("admin@yugen.com");
-    setPassword("admin12345");
+    setPassword("Admin@Yugen2026!");
   };
 
   const handleQuickCustomerFill = () => {
@@ -320,6 +312,9 @@ export function SignInScreen() {
 
 export function SignUpScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
+
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -372,21 +367,16 @@ export function SignUpScreen() {
         localStorage.setItem("yugen_token", data.accessToken);
         localStorage.setItem("yugen_user", JSON.stringify(data.user));
 
+        const targetRoute = redirectParam || "/profile";
         setSuccess("Account created successfully! Redirecting...");
         setTimeout(() => {
-          router.push("/profile");
+          router.push(targetRoute);
         }, 800);
       } else {
-        setSuccess("Account created successfully! Redirecting...");
-        setTimeout(() => {
-          router.push("/profile");
-        }, 800);
+        setError(apiError || "Failed to create account. Please try again.");
       }
-    } catch (err) {
-      setSuccess("Account created successfully!");
-      setTimeout(() => {
-        router.push("/profile");
-      }, 800);
+    } catch (err: any) {
+      setError(err?.message || "An error occurred during sign up.");
     } finally {
       setLoading(false);
     }

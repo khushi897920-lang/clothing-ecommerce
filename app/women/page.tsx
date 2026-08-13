@@ -14,8 +14,10 @@ import {
   ChevronUp,
   ShieldCheck,
   Star,
+  RefreshCw,
 } from "lucide-react";
-import { catalogProducts, CatalogProduct } from "@/data/catalogProducts";
+import { CatalogProduct } from "@/data/catalogProducts";
+import { productApi, userApi, mapBackendProduct } from "@/lib/apiClient";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
@@ -47,11 +49,14 @@ const COLORS = [
 ];
 
 export default function WomenCollectionPage() {
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
   // Filter States
   const [selectedCategory, setSelectedCategory] = useState<string>("All Women");
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
-  const [priceMax, setPriceMax] = useState<number>(200);
+  const [priceMax, setPriceMax] = useState<number>(5000);
   const [inStock, setInStock] = useState<boolean>(false);
   const [outOfStock, setOutOfStock] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -61,6 +66,68 @@ export default function WomenCollectionPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Load wishlist on mount
+  useEffect(() => {
+    userApi.getWishlist().then(({ data }) => {
+      const list = data?.wishlist || data?.items;
+      if (list && Array.isArray(list)) {
+        setWishlist(list.map((w: any) => w.productId || w.product?.id));
+      } else {
+        setWishlist([]);
+      }
+    });
+  }, []);
+
+  // Fetch real products from API Gateway on filter changes
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+
+    const params: Record<string, string | number> = {
+      audience: "WOMEN"
+    };
+
+    if (selectedCategory && selectedCategory !== "All Women") {
+      params.category = selectedCategory;
+    }
+    if (selectedSizes.length > 0) {
+      params.size = selectedSizes[0];
+    }
+    if (selectedColors.length > 0) {
+      params.color = selectedColors[0];
+    }
+    if (priceMax && priceMax < 5000) {
+      params.maxPrice = priceMax;
+    }
+    if (searchQuery.trim()) {
+      params.q = searchQuery.trim();
+    }
+    if (sortBy) {
+      if (sortBy === "price-low-high" || sortBy === "low-high") params.sort = "price_asc";
+      else if (sortBy === "price-high-low" || sortBy === "high-low") params.sort = "price_desc";
+      else if (sortBy === "newest") params.sort = "createdAt_desc";
+      else params.sort = sortBy;
+    }
+
+    productApi.getCatalog(params).then(({ data, error: apiError }) => {
+      if (!active) return;
+      if (apiError) {
+        setError(apiError);
+        setProducts([]);
+      } else if (data?.products) {
+        setProducts(data.products.map(mapBackendProduct));
+      } else {
+        setProducts([]);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCategory, selectedSizes, selectedColors, priceMax, searchQuery, sortBy]);
 
   // Accordion Expand/Collapse States
   const [openAccordion, setOpenAccordion] = useState({
@@ -74,9 +141,17 @@ export default function WomenCollectionPage() {
   const toggleWishlist = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setWishlist((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+    if (wishlist.includes(id)) {
+      setWishlist((prev) => prev.filter((item) => item !== id));
+      userApi.removeFromWishlist(id).then(() => {
+        window.dispatchEvent(new Event("yugen-state-updated"));
+      });
+    } else {
+      setWishlist((prev) => [...prev, id]);
+      userApi.addToWishlist(id).then(() => {
+        window.dispatchEvent(new Event("yugen-state-updated"));
+      });
+    }
   };
 
   const clearFilters = () => {
@@ -91,7 +166,7 @@ export default function WomenCollectionPage() {
 
   // Filter Women Dataset Products
   const womenDatasetProducts = useMemo(() => {
-    return catalogProducts.filter((product) => {
+    return products.filter((product) => {
       // Must be Women's collection
       if (product.gender !== "Women") return false;
 
@@ -113,7 +188,7 @@ export default function WomenCollectionPage() {
       }
 
       // Price
-      if (product.price > priceMax) return false;
+      if (priceMax < 5000 && product.price > priceMax) return false;
 
       // Size
       if (
@@ -130,6 +205,7 @@ export default function WomenCollectionPage() {
       return true;
     });
   }, [
+    products,
     searchQuery,
     selectedCategory,
     priceMax,
@@ -313,15 +389,16 @@ export default function WomenCollectionPage() {
                 <div className="space-y-3">
                   <input
                     type="range"
-                    min="20"
-                    max="200"
+                    min="500"
+                    max="5000"
+                    step="50"
                     value={priceMax}
                     onChange={(e) => setPriceMax(Number(e.target.value))}
                     className="w-full accent-[#B08968]"
                   />
                   <div className="flex items-center justify-between text-[11px] text-[#756A5E] font-medium">
-                    <span>$20</span>
-                    <span className="text-[#25211D] font-bold">${priceMax}</span>
+                    <span>₹500</span>
+                    <span className="text-[#25211D] font-bold">₹{priceMax}</span>
                   </div>
                 </div>
               )}
@@ -452,82 +529,111 @@ export default function WomenCollectionPage() {
             </div>
 
             {/* DATASET PRODUCT CARDS GRID */}
-            <div
-              className={
-                viewMode === "grid"
-                  ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
-                  : "space-y-4"
-              }
-            >
-              {paginatedProducts.map((p) => (
-                <Link
-                  key={p.id}
-                  href={`/products/${p.slug}`}
-                  className="group bg-[#FBFAF6] rounded-xl overflow-hidden border border-[#463627]/10 shadow-sm hover:shadow-md transition-all flex flex-col"
+            {loading ? (
+              <div className="text-center py-20 bg-[#FBFAF6] rounded-xl border border-[#463627]/12 p-8 flex flex-col items-center justify-center">
+                <RefreshCw className="w-8 h-8 text-[#B08968] animate-spin mb-4" />
+                <p className="text-sm font-medium text-[#756A5E]">Loading products catalog...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-20 bg-[#FBFAF6] rounded-xl border border-[#463627]/12 p-8">
+                <p className="text-2xl font-normal text-red-700 mb-2 uppercase" style={{ fontFamily: '"Poiret One", sans-serif' }}>
+                  Error loading catalog
+                </p>
+                <p className="text-[12px] text-[#756A5E] mb-6">{error}</p>
+                <button
+                  onClick={() => {
+                    setPriceMax((p) => p + 0.001);
+                  }}
+                  className="bg-[#25211D] text-white text-[11px] px-6 py-2.5 rounded-full font-medium uppercase tracking-wider"
                 >
-                  {/* Image container with warm background and dataset image */}
-                  <div className="relative aspect-[4/5] min-h-[260px] bg-[#EAE6DD] overflow-hidden">
-                    <Image
-                      src={p.image}
-                      alt={p.name}
-                      fill
-                      priority
-                      sizes="(min-width: 1024px) 25vw, 50vw"
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <button
-                      onClick={(e) => toggleWishlist(p.id, e)}
-                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-[#25211D] hover:bg-white transition-all shadow-sm z-10"
-                    >
-                      <Heart
-                        size={15}
-                        className={wishlist.includes(p.id) ? "fill-red-500 text-red-500" : ""}
+                  Retry Fetch
+                </button>
+              </div>
+            ) : paginatedProducts.length === 0 ? (
+              <div className="text-center py-20 bg-[#FBFAF6] rounded-xl border border-[#463627]/12 p-8">
+                <p
+                  className="text-2xl font-normal text-[#25211D] mb-2 uppercase"
+                  style={{ fontFamily: '"Poiret One", sans-serif' }}
+                >
+                  No products matched your filters.
+                </p>
+                <p className="text-[12px] text-[#756A5E] mb-6">
+                  Try adjusting your category, price range, or color filters.
+                </p>
+                <button
+                  onClick={() => {
+                    setSelectedCategory("All Women");
+                    setSelectedSizes([]);
+                    setSelectedColors([]);
+                  }}
+                  className="bg-[#25211D] text-white text-[11px] px-6 py-2.5 rounded-full font-medium uppercase tracking-wider"
+                >
+                  Clear All Filters
+                </button>
+              </div>
+            ) : (
+              <div
+                className={
+                  viewMode === "grid"
+                    ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+                    : "space-y-4"
+                }
+              >
+                {paginatedProducts.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/products/${p.slug}`}
+                    className="group bg-[#FBFAF6] rounded-xl overflow-hidden border border-[#463627]/10 shadow-sm hover:shadow-md transition-all flex flex-col"
+                  >
+                    {/* Image container with warm background and dataset image */}
+                    <div className="relative aspect-[4/5] min-h-[260px] bg-[#EAE6DD] overflow-hidden">
+                      <Image
+                        src={p.image}
+                        alt={p.name}
+                        fill
+                        priority
+                        sizes="(min-width: 1024px) 25vw, 50vw"
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
                       />
-                    </button>
-                  </div>
+                      <button
+                        onClick={(e) => toggleWishlist(p.id, e)}
+                        className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-[#25211D] hover:bg-white transition-all shadow-sm z-10"
+                      >
+                        <Heart
+                          size={15}
+                          className={wishlist.includes(p.id) ? "fill-[#C0392B] text-[#C0392B]" : "text-[#25211D]"}
+                        />
+                      </button>
+                    </div>
 
-                  {/* Card Content */}
-                  <div className="p-4 flex flex-col flex-1 justify-between space-y-2">
-                    <div>
-                      <h3 className="text-xs font-semibold text-[#25211D] truncate group-hover:text-[#B08968] transition-colors">
-                        {p.name}
-                      </h3>
+                    {/* Meta info matching browser design aesthetics */}
+                    <div className="p-4 flex-1 flex flex-col justify-between">
+                      <div>
+                        <p className="eyebrow dark mb-1.5">{p.category}</p>
+                        <h3 className="text-xs font-bold text-[#25211D] tracking-wide uppercase line-clamp-1">
+                          {p.name}
+                        </h3>
+                      </div>
 
-                      {/* Ratings */}
-                      <div className="flex items-center space-x-1 my-1">
-                        <div className="flex text-[#E5B842]">
-                          {[...Array(5)].map((_, i) => (
-                            <Star key={i} size={11} className="fill-[#E5B842]" />
+                      <div className="flex items-center justify-between pt-3 border-t border-[#463627]/10 mt-3">
+                        <p className="text-xs font-black text-[#25211D]">{p.price}</p>
+
+                        {/* Color Swatches — derived from real variant colors */}
+                        <div className="flex items-center space-x-1.5 pt-1">
+                          {(p.swatches || []).map((hex, i) => (
+                            <span
+                              key={i}
+                              className="w-3 h-3 rounded-full border border-black/20"
+                              style={{ backgroundColor: hex }}
+                            />
                           ))}
                         </div>
-                        <span className="text-[10px] text-[#756A5E]">(94)</span>
-                      </div>
-
-                      {/* Price */}
-                      <div className="flex items-center space-x-2 mt-1">
-                        <span className="text-xs font-bold text-[#25211D]">
-                          ${p.price.toFixed(2)}
-                        </span>
-                        <span className="text-[10px] text-[#756A5E]">
-                          • {p.category}
-                        </span>
                       </div>
                     </div>
-
-                    {/* Color Swatches */}
-                    <div className="flex items-center space-x-1.5 pt-1">
-                      {p.swatches.map((hex, i) => (
-                        <span
-                          key={i}
-                          className="w-3 h-3 rounded-full border border-black/20"
-                          style={{ backgroundColor: hex }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                  </Link>
+                ))}
+              </div>
+            )}
 
             {/* PAGINATION BAR */}
             {totalPages > 1 && (

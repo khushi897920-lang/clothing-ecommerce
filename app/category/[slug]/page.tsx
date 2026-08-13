@@ -16,7 +16,8 @@ import {
   AlertCircle,
   PackageOpen,
 } from "lucide-react";
-import { catalogProducts, CatalogProduct } from "@/data/catalogProducts";
+import { CatalogProduct } from "@/data/catalogProducts";
+import { productApi, userApi, mapBackendProduct } from "@/lib/apiClient";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
@@ -80,6 +81,8 @@ export default function CategoryPage() {
   const rawSlug = (params?.slug as string) || "";
   const slugKey = rawSlug.toLowerCase();
 
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+
   // Category Information
   const categoryInfo = useMemo(() => {
     if (CATEGORY_MAP[slugKey]) {
@@ -105,7 +108,7 @@ export default function CategoryPage() {
   const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
-  const [maxPrice, setMaxPrice] = useState<number>(250);
+  const [maxPrice, setMaxPrice] = useState<number>(5000);
   const [inStockOnly, setInStockOnly] = useState<boolean>(false);
 
   // UI States
@@ -122,42 +125,90 @@ export default function CategoryPage() {
     color: true,
   });
 
-  // Simulate smooth loading transition on category change
+  // Fetch wishlist on mount
   useEffect(() => {
+    userApi.getWishlist().then(({ data }) => {
+      const list = data?.wishlist || data?.items;
+      if (list && Array.isArray(list)) {
+        setWishlist(list.map((w: any) => w.productId || w.product?.id));
+      } else {
+        setWishlist([]);
+      }
+    });
+  }, []);
+
+  // Fetch real category products from Product Service on filter changes
+  useEffect(() => {
+    let active = true;
     setLoading(true);
     setError(null);
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [slugKey]);
 
-  // Read initial wishlist state from localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("yugen_wishlist");
-      if (stored) {
-        try {
-          const ids = JSON.parse(stored);
-          if (Array.isArray(ids)) setWishlist(ids);
-        } catch (e) {}
-      }
+    // Map legacy or header category slugs to PostgreSQL database slugs
+    const slugAliasMap: Record<string, string> = {
+      "t-shirts": "oversized-tshirts",
+      "hoodies": "outerwear",
+      "jackets": "jacket",
+      "jeans": "pants",
+      "joggers": "bottomwear",
+      "accessories": "activewear",
+    };
+    const targetCategorySlug = slugAliasMap[rawSlug.toLowerCase()] || rawSlug;
+
+    const params: Record<string, string | number> = {
+      category: targetCategorySlug
+    };
+
+    if (selectedGenders.length > 0) {
+      params.audience = selectedGenders[0].toUpperCase();
     }
-  }, []);
+    if (selectedSizes.length > 0) {
+      params.size = selectedSizes[0];
+    }
+    if (selectedColors.length > 0) {
+      params.color = selectedColors[0];
+    }
+    if (maxPrice && maxPrice < 5000) {
+      params.maxPrice = maxPrice;
+    }
+    if (sortBy) {
+      if (sortBy === "price-low-high" || sortBy === "low-high") params.sort = "price_asc";
+      else if (sortBy === "price-high-low" || sortBy === "high-low") params.sort = "price_desc";
+      else if (sortBy === "newest") params.sort = "createdAt_desc";
+      else params.sort = sortBy;
+    }
+
+    productApi.getCatalog(params).then(({ data, error: apiError }) => {
+      if (!active) return;
+      if (apiError) {
+        setError(apiError);
+        setProducts([]);
+      } else if (data?.products) {
+        setProducts(data.products.map(mapBackendProduct));
+      } else {
+        setProducts([]);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [rawSlug, selectedGenders, selectedSizes, selectedColors, maxPrice, sortBy]);
 
   const toggleWishlist = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setWishlist((prev) => {
-      const next = prev.includes(id)
-        ? prev.filter((item) => item !== id)
-        : [...prev, id];
-      if (typeof window !== "undefined") {
-        localStorage.setItem("yugen_wishlist", JSON.stringify(next));
+    if (wishlist.includes(id)) {
+      setWishlist((prev) => prev.filter((item) => item !== id));
+      userApi.removeFromWishlist(id).then(() => {
         window.dispatchEvent(new Event("yugen-state-updated"));
-      }
-      return next;
-    });
+      });
+    } else {
+      setWishlist((prev) => [...prev, id]);
+      userApi.addToWishlist(id).then(() => {
+        window.dispatchEvent(new Event("yugen-state-updated"));
+      });
+    }
   };
 
   const clearFilters = () => {
@@ -170,7 +221,7 @@ export default function CategoryPage() {
 
   // Filter Products for Current Category
   const categoryProducts = useMemo(() => {
-    return catalogProducts.filter((product) => {
+    return products.filter((product) => {
       const pCat = product.category.toLowerCase();
       const pName = product.name.toLowerCase();
 
@@ -205,7 +256,7 @@ export default function CategoryPage() {
 
       return true;
     });
-  }, [categoryInfo, selectedGenders, maxPrice, selectedSizes, inStockOnly]);
+  }, [products, categoryInfo, selectedGenders, maxPrice, selectedSizes, inStockOnly]);
 
   // Sorting Logic
   const sortedProducts = useMemo(() => {
@@ -508,48 +559,32 @@ export default function CategoryPage() {
                       >
                         <Heart
                           size={15}
-                          className={
-                            wishlist.includes(p.id)
-                              ? "fill-red-500 text-red-500"
-                              : ""
-                          }
+                          className={wishlist.includes(p.id) ? "fill-[#C0392B] text-[#C0392B]" : "text-[#25211D]"}
                         />
                       </button>
                     </div>
 
-                    <div className="p-4 flex flex-col flex-1 justify-between space-y-2">
+                    <div className="p-4 flex-1 flex flex-col justify-between">
                       <div>
-                        <h3 className="text-xs font-semibold text-[#25211D] truncate group-hover:text-[#6B4A37] transition-colors">
+                        <p className="eyebrow dark mb-1.5">{p.category}</p>
+                        <h3 className="text-xs font-bold text-[#25211D] tracking-wide uppercase line-clamp-1">
                           {p.name}
                         </h3>
-
-                        <div className="flex items-center space-x-1 my-1">
-                          <div className="flex text-[#E5B842]">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} size={11} className="fill-[#E5B842]" />
-                            ))}
-                          </div>
-                          <span className="text-[10px] text-[#756A5E]">(94)</span>
-                        </div>
-
-                        <div className="flex items-center space-x-2 mt-1">
-                          <span className="text-xs font-bold text-[#25211D]">
-                            ${p.price.toFixed(2)}
-                          </span>
-                          <span className="text-[10px] text-[#756A5E]">
-                            • {p.gender}
-                          </span>
-                        </div>
                       </div>
 
-                      <div className="flex items-center space-x-1.5 pt-1">
-                        {p.swatches.map((hex, i) => (
-                          <span
-                            key={i}
-                            className="w-3 h-3 rounded-full border border-black/20"
-                            style={{ backgroundColor: hex }}
-                          />
-                        ))}
+                      <div className="flex items-center justify-between pt-3 border-t border-[#463627]/10 mt-3">
+                        <p className="text-xs font-black text-[#25211D]">{p.price}</p>
+
+                        {/* Color Swatches — derived from real variant colors */}
+                        <div className="flex items-center space-x-1.5 pt-1">
+                          {(p.swatches || []).map((hex, i) => (
+                            <span
+                              key={i}
+                              className="w-3 h-3 rounded-full border border-black/20"
+                              style={{ backgroundColor: hex }}
+                            />
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </Link>

@@ -1,0 +1,75 @@
+openapi: 3.0.3
+info:
+  title: YUGEN Inventory Service API
+  description: Stock check, atomic reservation, release, and admin stock management.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8004/inventory
+  - url: http://localhost:8000/api/v1/inventory
+paths:
+  /check/{productId}:
+    get:
+      summary: Check stock availability for product variants
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Variant stock information with low-stock flags
+  /reserve:
+    post:
+      summary: Atomically reserve stock items
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [variantId, quantity]
+                    properties:
+                      variantId: { type: string }
+                      quantity: { type: integer }
+      responses:
+        '200':
+          description: Stock reserved
+        '409':
+          description: Insufficient stock
+  /admin/stock:
+    get:
+      summary: Admin inventory listing
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Full inventory status
+  /admin/stock/{variantId}:
+    patch:
+      summary: Admin update variant stock quantity
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stockQuantity]
+              properties:
+                stockQuantity: { type: integer }
+      responses:
+        '200':
+          description: Stock quantity updated
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

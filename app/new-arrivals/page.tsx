@@ -11,8 +11,10 @@ import {
   RotateCcw,
   ShieldCheck,
   Banknote,
+  RefreshCw,
 } from "lucide-react";
-import { catalogProducts, CatalogProduct } from "@/data/catalogProducts";
+import { CatalogProduct } from "@/data/catalogProducts";
+import { productApi, userApi, mapBackendProduct } from "@/lib/apiClient";
 import { Header } from "@/components/yugen/Header";
 import { Footer } from "@/components/yugen/Footer";
 
@@ -29,6 +31,9 @@ const COLORS = [
 ];
 
 export default function NewArrivalsPage() {
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
   // Filter & Sort States
   const [selectedSize, setSelectedSize] = useState<string>("All Sizes");
   const [selectedColor, setSelectedColor] = useState<string>("All Colors");
@@ -39,38 +44,52 @@ export default function NewArrivalsPage() {
   const [displayCount, setDisplayCount] = useState<number>(12);
   const [wishlist, setWishlist] = useState<string[]>([]);
 
-  // Load wishlist from localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("yugen_wishlist");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) setWishlist(parsed);
-        } catch (e) {}
+    setLoading(true);
+    setError("");
+
+    productApi.getCatalog({ sort: "createdAt_desc" }).then(({ data, error: apiError }) => {
+      if (apiError) {
+        setError(apiError);
+        setProducts([]);
+      } else if (data?.products) {
+        setProducts(data.products.map(mapBackendProduct));
+      } else {
+        setProducts([]);
       }
-    }
+      setLoading(false);
+    });
+
+    userApi.getWishlist().then(({ data }) => {
+      const list = data?.wishlist || data?.items;
+      if (list && Array.isArray(list)) {
+        setWishlist(list.map((w: any) => w.productId || w.product?.id));
+      } else {
+        setWishlist([]);
+      }
+    });
   }, []);
 
   const toggleWishlist = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setWishlist((prev) => {
-      const next = prev.includes(id)
-        ? prev.filter((item) => item !== id)
-        : [...prev, id];
-      if (typeof window !== "undefined") {
-        localStorage.setItem("yugen_wishlist", JSON.stringify(next));
+    if (wishlist.includes(id)) {
+      setWishlist((prev) => prev.filter((item) => item !== id));
+      userApi.removeFromWishlist(id).then(() => {
         window.dispatchEvent(new Event("yugen-state-updated"));
-      }
-      return next;
-    });
+      });
+    } else {
+      setWishlist((prev) => [...prev, id]);
+      userApi.addToWishlist(id).then(() => {
+        window.dispatchEvent(new Event("yugen-state-updated"));
+      });
+    }
   };
 
   // Official YUGEN Dataset Source with balanced Women & Men items
   const allProductsList = useMemo(() => {
-    const menProducts = catalogProducts.filter((p) => p.gender === "Men");
-    const womenProducts = catalogProducts.filter((p) => p.gender === "Women");
+    const menProducts = products.filter((p) => p.gender === "Men");
+    const womenProducts = products.filter((p) => p.gender === "Women");
     const interleaved: CatalogProduct[] = [];
     const maxLen = Math.max(menProducts.length, womenProducts.length);
 
@@ -80,7 +99,7 @@ export default function NewArrivalsPage() {
     }
 
     return interleaved;
-  }, []);
+  }, [products]);
 
   // Filtered Products
   const filteredProducts = useMemo(() => {
@@ -250,7 +269,19 @@ export default function NewArrivalsPage() {
 
         {/* 6. PRODUCT GRID (EXACT 6 COLUMNS ON DESKTOP) */}
         <section className="mb-12">
-          {visibleProducts.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-20 bg-[#FBFAF6] rounded-xl border border-[#DDD8CF]/40 p-8 flex flex-col items-center justify-center">
+              <RefreshCw className="w-8 h-8 text-[#8C6D53] animate-spin mb-4" />
+              <p className="text-sm font-medium text-[#756A5E]">Loading new arrivals...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-20 bg-[#FBFAF6] rounded-xl border border-[#DDD8CF]/40 p-8">
+              <p className="text-2xl font-normal text-red-700 mb-2 uppercase" style={{ fontFamily: '"Poiret One", sans-serif' }}>
+                Error loading catalog
+              </p>
+              <p className="text-[12px] text-[#756A5E] mb-6">{error}</p>
+            </div>
+          ) : visibleProducts.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-5">
               {visibleProducts.map((product) => (
                 <Link
@@ -293,7 +324,7 @@ export default function NewArrivalsPage() {
                         {product.name}
                       </h3>
                       <p className="text-xs font-bold text-[#171512] mt-0.5">
-                        ${product.price.toFixed(2)}
+                        {product.price}
                       </p>
                     </div>
 

@@ -5,16 +5,39 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import bcrypt from "bcryptjs";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
 });
 
 const prisma = new PrismaClient({ adapter });
-// Seeds the clothing catalogue from dataset/products.csv (50 products).
-// Uses upsert everywhere, so this is safe to re-run without creating duplicates
-// or violating the composite-unique / partial-unique constraints in the DB.
+
 async function main() {
+  console.log("Seeding Admin account...");
+  const adminEmail = process.env.ADMIN_EMAIL || "admin@yugen.com";
+  const adminPassword = process.env.ADMIN_PASSWORD || "Admin@Yugen2026!";
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
+
+  await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {
+      role: "ADMIN",
+      isActive: true,
+      emailVerified: true,
+    },
+    create: {
+      firstName: "YUGEN",
+      lastName: "Admin",
+      email: adminEmail,
+      passwordHash: passwordHash,
+      role: "ADMIN",
+      emailVerified: true,
+      isActive: true,
+    },
+  });
+  console.log(`Admin account seeded: ${adminEmail}`);
+
   console.log("Seeding categories...");
   const categoryMap: Record<string, string> = {};
   {

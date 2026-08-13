@@ -17,7 +17,8 @@ import {
   X,
   ShieldCheck,
 } from "lucide-react";
-import { catalogProducts, CatalogProduct } from "@/data/catalogProducts";
+import { CatalogProduct } from "@/data/catalogProducts";
+import { productApi, userApi, mapBackendProduct } from "@/lib/apiClient";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
@@ -57,24 +58,28 @@ export default function ProductsPage() {
   const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
-  const [maxPrice, setMaxPrice] = useState<number>(200);
+  const [maxPrice, setMaxPrice] = useState<number>(5000);
   const [inStockOnly, setInStockOnly] = useState<boolean>(false);
   const [outOfStockOnly, setOutOfStockOnly] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   // UI States
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("featured");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [mobileFilterOpen, setMobileFilterOpen] = useState<boolean>(false);
 
-  // Sync URL search parameters on client mount safely without hydration mismatch
+  // Synchronize URL search parameters on client mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const genderParam = params.get("gender");
       const sortParam = params.get("sort");
+      const queryParam = params.get("q");
 
       if (genderParam) {
         setSelectedGenders([genderParam]);
@@ -82,8 +87,71 @@ export default function ProductsPage() {
       if (sortParam) {
         setSortBy(sortParam);
       }
+      if (queryParam) {
+        setSearchQuery(queryParam);
+      }
+
+      userApi.getWishlist().then(({ data }) => {
+        const list = data?.wishlist || data?.items;
+        if (list && Array.isArray(list)) {
+          setWishlist(list.map((w: any) => w.productId || w.product?.id));
+        } else {
+          setWishlist([]);
+        }
+      });
     }
   }, []);
+
+  // Fetch real products from API Gateway on filter changes
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+
+    const params: Record<string, string | number> = {};
+
+    if (selectedCategories.length > 0) {
+      params.category = selectedCategories[0];
+    }
+    if (selectedGenders.length > 0) {
+      params.audience = selectedGenders[0].toUpperCase();
+    }
+    if (selectedSizes.length > 0) {
+      params.size = selectedSizes[0];
+    }
+    if (selectedColors.length > 0) {
+      params.color = selectedColors[0];
+    }
+    if (maxPrice && maxPrice < 5000) {
+      params.maxPrice = maxPrice;
+    }
+    if (searchQuery.trim()) {
+      params.q = searchQuery.trim();
+    }
+    if (sortBy) {
+      if (sortBy === "price-low-high" || sortBy === "low-high") params.sort = "price_asc";
+      else if (sortBy === "price-high-low" || sortBy === "high-low") params.sort = "price_desc";
+      else if (sortBy === "newest") params.sort = "createdAt_desc";
+      else params.sort = sortBy;
+    }
+
+    productApi.getCatalog(params).then(({ data, error: apiError }) => {
+      if (!active) return;
+      if (apiError) {
+        setError(apiError);
+        setProducts([]);
+      } else if (data?.products) {
+        setProducts(data.products.map(mapBackendProduct));
+      } else {
+        setProducts([]);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCategories, selectedGenders, selectedSizes, selectedColors, maxPrice, searchQuery, sortBy]);
 
   // Accordion Expand/Collapse States
   const [openSections, setOpenSections] = useState({
@@ -102,11 +170,17 @@ export default function ProductsPage() {
   const toggleWishlist = (productId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setWishlist((prev) =>
-      prev.includes(productId)
-        ? prev.filter((id) => id !== productId)
-        : [...prev, productId]
-    );
+    if (wishlist.includes(productId)) {
+      setWishlist((prev) => prev.filter((id) => id !== productId));
+      userApi.removeFromWishlist(productId).then(() => {
+        window.dispatchEvent(new Event("yugen-state-updated"));
+      });
+    } else {
+      setWishlist((prev) => [...prev, productId]);
+      userApi.addToWishlist(productId).then(() => {
+        window.dispatchEvent(new Event("yugen-state-updated"));
+      });
+    }
   };
 
   // Clear all filters
@@ -115,7 +189,7 @@ export default function ProductsPage() {
     setSelectedGenders([]);
     setSelectedSizes([]);
     setSelectedColors([]);
-    setMaxPrice(200);
+    setMaxPrice(5000);
     setInStockOnly(false);
     setOutOfStockOnly(false);
     setSearchQuery("");
@@ -125,23 +199,23 @@ export default function ProductsPage() {
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     CATEGORIES.forEach((cat) => {
-      counts[cat] = catalogProducts.filter((p) => p.category === cat).length;
+      counts[cat] = products.filter((p) => p.category === cat).length;
     });
     return counts;
-  }, []);
+  }, [products]);
 
   // Gender counts
   const genderCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     GENDERS.forEach((g) => {
-      counts[g] = catalogProducts.filter((p) => p.gender === g).length;
+      counts[g] = products.filter((p) => p.gender === g).length;
     });
     return counts;
-  }, []);
+  }, [products]);
 
   // Filtered and Sorted Products
   const filteredProducts = useMemo(() => {
-    return catalogProducts.filter((product) => {
+    return products.filter((product) => {
       // Search
       if (
         searchQuery &&
@@ -174,12 +248,13 @@ export default function ProductsPage() {
       // Color
       if (
         selectedColors.length > 0 &&
-        !selectedColors.includes(product.color)
+        !(product.colors || []).some((col: string) => selectedColors.includes(col))
       ) {
         return false;
       }
       // Price
-      if (product.price > maxPrice) {
+      const priceVal = typeof (product as any).priceNum === "number" ? (product as any).priceNum : (parseFloat(String(product.price).replace(/[^0-9.]/g, "")) || 0);
+      if (maxPrice < 5000 && priceVal > maxPrice) {
         return false;
       }
       // Availability
@@ -192,6 +267,7 @@ export default function ProductsPage() {
       return true;
     });
   }, [
+    products,
     searchQuery,
     selectedCategories,
     selectedGenders,
@@ -519,16 +595,17 @@ export default function ProductsPage() {
                 <div className="space-y-4">
                   <input
                     type="range"
-                    min="10"
-                    max="200"
+                    min="500"
+                    max="5000"
+                    step="50"
                     value={maxPrice}
                     onChange={(e) => setMaxPrice(Number(e.target.value))}
                     className="w-full accent-[#6B4A37] cursor-pointer"
                   />
                   <div className="flex items-center justify-between text-[11px] font-medium text-[#494139]">
-                    <span>$10</span>
-                    <span className="font-bold text-[#25211D]">Max: ${maxPrice}</span>
-                    <span>$200</span>
+                    <span>₹500</span>
+                    <span className="font-bold text-[#25211D]">Max: ₹{maxPrice}</span>
+                    <span>₹5000</span>
                   </div>
                 </div>
               )}
@@ -587,7 +664,27 @@ export default function ProductsPage() {
 
           {/* 3. Product Cards Grid */}
           <div className="lg:col-span-3">
-            {paginatedProducts.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-20 bg-[#FBFAF6] rounded-xl border border-[#463627]/12 p-8 flex flex-col items-center justify-center">
+                <RefreshCw className="w-8 h-8 text-[#6B4A37] animate-spin mb-4" />
+                <p className="text-sm font-medium text-[#756A5E]">Loading products catalog...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-20 bg-[#FBFAF6] rounded-xl border border-[#463627]/12 p-8">
+                <p className="text-2xl font-normal text-red-700 mb-2 uppercase" style={{ fontFamily: '"Poiret One", sans-serif' }}>
+                  Error loading catalog
+                </p>
+                <p className="text-[12px] text-[#756A5E] mb-6">{error}</p>
+                <button
+                  onClick={() => {
+                    setMaxPrice((p) => p + 0.001);
+                  }}
+                  className="bg-[#25211D] text-white text-[11px] px-6 py-2.5 rounded-full font-medium uppercase tracking-wider"
+                >
+                  Retry Fetch
+                </button>
+              </div>
+            ) : paginatedProducts.length === 0 ? (
               <div className="text-center py-20 bg-[#FBFAF6] rounded-xl border border-[#463627]/12 p-8">
                 <p
                   className="text-2xl font-normal text-[#25211D] mb-2 uppercase"
@@ -668,9 +765,9 @@ export default function ProductsPage() {
                           {product.formattedPrice}
                         </p>
 
-                        {/* Color swatches matching Landing Page design */}
+                        {/* Color swatches — derived from real variant colors */}
                         <div className="swatches">
-                          {product.swatches.map((hex, idx) => (
+                          {(product.swatches || []).map((hex, idx) => (
                             <span
                               key={idx}
                               style={{ backgroundColor: hex }}

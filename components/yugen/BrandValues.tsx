@@ -1,3 +1,5 @@
+"use client";
+
 import { brandValues } from "@/data/brandValues";
 
 export function BrandValues() {

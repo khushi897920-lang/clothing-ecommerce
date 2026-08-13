@@ -1,8 +1,21 @@
+"use client";
+
 import React from "react";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopbar from "./AdminTopbar";
+import { useAuth } from "@/lib/useAuth";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { authState } = useAuth(true, "ADMIN");
+
+  if (authState === "CHECKING") {
+    return (
+      <div className="min-h-screen bg-[#F8F6F2] flex items-center justify-center text-sm font-medium text-[#1c1c1a]">
+        Checking authentication...
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-[#F8F6F2] font-sans text-[#1c1c1a]">
       <AdminSidebar />

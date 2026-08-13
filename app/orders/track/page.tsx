@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, Suspense } from "react";
+import React, { useState, useEffect, useMemo, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -20,16 +20,30 @@ import {
   Shield,
   HelpCircle,
 } from "lucide-react";
-import { catalogProducts } from "@/data/catalogProducts";
+import { orderApi, mapBackendProduct } from "@/lib/apiClient";
+import { useAuth } from "@/lib/useAuth";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
 
 function OrderTrackingContent() {
+  const { authState } = useAuth(true);
   const searchParams = useSearchParams();
-  const initialOrderId = searchParams.get("id") || "YGN-A8F7G";
+  const initialOrderId = searchParams.get("id") || "";
   const [orderIdInput, setOrderIdInput] = useState<string>(initialOrderId);
   const [activeOrderId, setActiveOrderId] = useState<string>(initialOrderId);
+  const [realOrder, setRealOrder] = useState<any>(null);
+
+  useEffect(() => {
+    if (authState !== "AUTHENTICATED") return;
+    if (activeOrderId) {
+      orderApi.getTracking(activeOrderId).then(({ data }) => {
+        if (data?.order) {
+          setRealOrder(data.order);
+        }
+      });
+    }
+  }, [activeOrderId, authState]);
 
   const handleSearchOrder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,45 +51,62 @@ function OrderTrackingContent() {
     setActiveOrderId(orderIdInput.trim().toUpperCase());
   };
 
-  // Sample Tracking Events
+  const status = realOrder?.status?.toUpperCase() || "CONFIRMED";
+
+  // Dynamic Tracking Events based on status
   const trackingTimeline = [
     {
       title: "Order Placed & Confirmed",
-      date: "Dec 14, 2026 • 10:30 AM",
+      date: realOrder?.createdAt ? new Date(realOrder.createdAt).toLocaleDateString() : "Recent",
       description: "Payment verified. Your quiet-luxury order has been received.",
       completed: true,
     },
     {
       title: "Quality Check & Packaged",
-      date: "Dec 15, 2026 • 09:15 AM",
+      date: "In Process",
       description: "Items inspected and packaged in eco-friendly YUGEN box.",
-      completed: true,
+      completed: status === "PACKED" || status === "SHIPPED" || status === "DELIVERED",
     },
     {
       title: "Dispatched & In Transit",
-      date: "Dec 15, 2026 • 02:45 PM",
-      description: "Carrier: DHL Express (Tracking #948201940). Departing New York Facility.",
-      completed: true,
-      current: true,
-    },
-    {
-      title: "Out for Delivery",
-      date: "Estimated Dec 18, 2026",
-      description: "Package loaded onto courier delivery vehicle.",
-      completed: false,
+      date: status === "SHIPPED" || status === "DELIVERED" ? "Dispatched" : "Pending",
+      description: "Carrier: DHL Express. Package in transit.",
+      completed: status === "SHIPPED" || status === "DELIVERED",
+      current: status === "SHIPPED",
     },
     {
       title: "Delivered",
-      date: "Estimated Dec 18, 2026",
-      description: "Delivering to 1232 Main Street, Fload, Roasm, FA 96687.",
-      completed: false,
+      date: status === "DELIVERED" ? "Delivered" : "Estimated",
+      description: `Delivering to ${realOrder?.shippingAddress?.street || "Selected Address"}.`,
+      completed: status === "DELIVERED",
     },
   ];
 
-  const items = [
-    { product: catalogProducts[0], qty: 1, color: "Sky Blue", size: "M" },
-    { product: catalogProducts[13] || catalogProducts[3], qty: 2, color: "Sand", size: "32" },
-  ];
+  const items = useMemo(() => {
+    if (realOrder?.items) {
+      return realOrder.items.map((item: any) => {
+        const v = item.variant;
+        const p = v?.product || item.product;
+        const mapped = mapBackendProduct(p) || null;
+        if (!mapped) return null;
+        return {
+          product: mapped,
+          qty: item.quantity,
+          color: v?.color || "Default",
+          size: v?.size || "M",
+        };
+      });
+    }
+    return [];
+  }, [realOrder]);
+
+  if (authState === "CHECKING") {
+    return (
+      <div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-sm font-medium text-[#25211D]">
+        Checking authentication...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F5F0] text-[#25211D] font-sans antialiased">
@@ -192,12 +223,12 @@ function OrderTrackingContent() {
 
               {/* Item Previews */}
               <div className="space-y-4 border-b border-[#463627]/12 pb-4">
-                {items.map((item, idx) => (
+                {items.map((item: any, idx: number) => (
                   <div key={idx} className="flex items-center space-x-3">
                     <div className="w-12 h-15 bg-[#EAE6DD] rounded overflow-hidden relative flex-shrink-0">
                       <Image
-                        src={item.product.image}
-                        alt={item.product.name}
+                        src={item.product?.imageUrl || item.product?.image || "/ABOUT_BG.png"}
+                        alt={item.product?.name || "Product"}
                         fill
                         sizes="48px"
                         className="object-cover"

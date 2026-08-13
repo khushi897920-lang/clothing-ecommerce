@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import Modal from "./Modal"; // We will create this
+import Modal from "./Modal";
+import { productApi } from "@/lib/apiClient"; // We will create this
 
 type ProductStatus = "Active" | "Low Stock" | "Out of Stock";
 
@@ -100,7 +101,9 @@ const STATUSES = ["All Status", "Active", "Low Stock", "Out of Stock"];
 const ITEMS_PER_PAGE = 5;
 
 export default function ProductsTable() {
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS_INITIAL);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [selectedStatus, setSelectedStatus] = useState("All Status");
@@ -114,6 +117,33 @@ export default function ProductsTable() {
 
   // Modal State
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError("");
+    productApi.getAdminProducts().then(({ data, error: apiError }) => {
+      if (apiError) {
+        setError(apiError);
+        setProducts([]);
+      } else if (data?.products) {
+        setProducts(
+          data.products.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            sku: p.sku || `SKU-${p.id.slice(0, 5)}`,
+            category: p.category?.name || "Apparel",
+            price: parseFloat(p.price || "0"),
+            stock: p.variants?.reduce((acc: number, v: any) => acc + (v.stockQuantity || 0), 0) || 0,
+            status: p.isActive ? (p.variants?.some((v: any) => (v.stockQuantity || 0) > 0) ? "Active" : "Out of Stock") : "Out of Stock",
+            image: p.images?.[0]?.imageUrl || p.imageUrl || "/ABOUT_BG.png",
+          }))
+        );
+      } else {
+        setProducts([]);
+      }
+      setLoading(false);
+    });
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -161,9 +191,10 @@ export default function ProductsTable() {
     }
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (productToDelete) {
       setProducts(products.filter(p => p.id !== productToDelete.id));
+      await productApi.deleteProduct(productToDelete.id);
       setProductToDelete(null);
     }
   };
@@ -289,7 +320,19 @@ export default function ProductsTable() {
               </tr>
             </thead>
             <tbody>
-              {paginatedProducts.length > 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-xs text-[#a39e99]">
+                    Loading products list...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-xs text-red-500 font-semibold">
+                    Error: {error}
+                  </td>
+                </tr>
+              ) : paginatedProducts.length > 0 ? (
                 paginatedProducts.map((product) => (
                   <tr
                     key={product.id}

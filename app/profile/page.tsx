@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -22,18 +22,22 @@ import {
   KeyRound,
 } from "lucide-react";
 import { catalogProducts } from "@/data/catalogProducts";
+import { authApi, userApi, mapBackendProduct } from "@/lib/apiClient";
+import { useAuth } from "@/lib/useAuth";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { authState } = useAuth(true);
 
   // User Profile Form State
-  const [fullName, setFullName] = useState<string>("Sarah Johnson");
-  const [phone, setPhone] = useState<string>("+1 555-0123");
-  const [email, setEmail] = useState<string>("sarah.j@email.com");
+  const [fullName, setFullName] = useState<string>("");
+  const [phone, setPhone] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
   const [gender, setGender] = useState<string>("Female");
+  const [loading, setLoading] = useState<boolean>(true);
 
   // Password Change Form State
   const [currentPassword, setCurrentPassword] = useState<string>("");
@@ -44,15 +48,79 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<"info" | "addresses" | "password">("info");
   const [toastMessage, setToastMessage] = useState<string>("");
   const [showAddressForm, setShowAddressForm] = useState<boolean>(false);
+  const [wishlistPreviews, setWishlistPreviews] = useState<any[]>([]);
+  const [addresses, setAddresses] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (authState !== "AUTHENTICATED") return;
+
+    authApi.getProfile().then(({ data }) => {
+      if (data?.user) {
+        const u = data.user;
+        setFullName(`${u.firstName || ""} ${u.lastName || ""}`.trim() || u.name || "Customer");
+        setEmail(u.email || "");
+        setPhone(u.phone || "");
+      }
+      setLoading(false);
+    });
+
+    userApi.getWishlist().then(({ data }) => {
+      const list = data?.wishlist || data?.items;
+      if (list && Array.isArray(list)) {
+        setWishlistPreviews(
+          list.map((item: any) => {
+            const p = mapBackendProduct(item.product) || item.product;
+            return {
+              product: p,
+              title: p?.name || "Apparel Item",
+              category: p?.category || "Apparel",
+              price: p?.price || "₹2,990",
+            };
+          })
+        );
+      } else {
+        setWishlistPreviews([]);
+      }
+    });
+
+    userApi.getAddresses().then(({ data }) => {
+      if (data?.addresses && Array.isArray(data.addresses)) {
+        setAddresses(data.addresses);
+      } else {
+        setAddresses([]);
+      }
+    });
+  }, [authState]);
+
+  if (authState === "CHECKING") {
+    return (
+      <div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-sm font-medium text-[#25211D]">
+        Checking authentication...
+      </div>
+    );
+  }
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 3500);
   };
 
-  const handleUpdateBasicDetails = (e: React.FormEvent) => {
+  const handleUpdateBasicDetails = async (e: React.FormEvent) => {
     e.preventDefault();
+    const parts = fullName.split(" ");
+    const firstName = parts[0] || fullName;
+    const lastName = parts.slice(1).join(" ");
+
+    const { data, error } = await authApi.updateProfile({ firstName, lastName, phone });
+    if (error) {
+      showToast(`Error: ${error}`);
+      return;
+    }
+    if (data?.user) {
+      localStorage.setItem("yugen_user", JSON.stringify(data.user));
+    }
     showToast("Profile details updated successfully!");
+    window.dispatchEvent(new Event("yugen-state-updated"));
   };
 
   const handleUpdatePassword = (e: React.FormEvent) => {
@@ -72,16 +140,11 @@ export default function ProfilePage() {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("yugen_token");
+    localStorage.removeItem("yugen_user");
+    window.dispatchEvent(new Event("yugen-state-updated"));
     router.push("/signin");
   };
-
-  // Sample Wishlist items for preview grid (4 items matching screenshot)
-  const wishlistPreviews = [
-    { product: catalogProducts[0], title: "Linen Shirt", category: "Women", price: "$46.99", originalPrice: "$59.00" },
-    { product: catalogProducts[25] || catalogProducts[1], title: "Floral Dress", category: "Women", price: "$49.99", originalPrice: "$69.00" },
-    { product: catalogProducts[13] || catalogProducts[3], title: "Relaxed Trousers", category: "Men", price: "$59.99", originalPrice: "$79.00" },
-    { product: catalogProducts[25] || catalogProducts[4], title: "Satin Slip Dress", category: "Women", price: "$119.00", originalPrice: "$149.00" },
-  ];
 
   return (
     <div className="min-h-screen bg-[#F7F5F0] text-[#25211D] font-sans antialiased">
@@ -293,38 +356,48 @@ export default function ProfilePage() {
                     <Lock className="w-4 h-4 text-[#6B4A37]" />
                   </div>
 
-                  {/* Default Address Container */}
-                  <div className="bg-[#F7F5F0] rounded-xl border border-[#463627]/15 p-4 space-y-2 mb-4">
-                    <div className="flex items-center justify-between border-b border-[#463627]/10 pb-2">
-                      <span className="text-xs font-bold text-[#25211D]">Default Address</span>
-                      <span className="text-[10px] bg-[#6B4A37]/15 text-[#6B4A37] font-bold px-2 py-0.5 rounded">
-                        YGN-DEF
-                      </span>
-                    </div>
+                  {/* Address Container */}
+                  {addresses.length > 0 ? (
+                    <div className="space-y-3 mb-4">
+                      {addresses.map((addr: any, idx: number) => (
+                        <div key={addr.id || idx} className="bg-[#F7F5F0] rounded-xl border border-[#463627]/15 p-4 space-y-2">
+                          <div className="flex items-center justify-between border-b border-[#463627]/10 pb-2">
+                            <span className="text-xs font-bold text-[#25211D]">
+                              {addr.isDefault ? "Default Address" : `Address #${idx + 1}`}
+                            </span>
+                            {addr.isDefault && (
+                              <span className="text-[10px] bg-[#6B4A37]/15 text-[#6B4A37] font-bold px-2 py-0.5 rounded">
+                                YGN-DEF
+                              </span>
+                            )}
+                          </div>
 
-                    <div className="text-xs text-[#494139] space-y-1 pt-1">
-                      <div className="flex justify-between">
-                        <span className="text-[#756A5E]">Name</span>
-                        <span className="font-bold text-[#25211D]">{fullName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#756A5E]">Phone</span>
-                        <span>{phone}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#756A5E]">Address line 1, 2</span>
-                        <span>1209 Sky Blvd</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#756A5E]">PIN</span>
-                        <span>68507</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#756A5E]">Country</span>
-                        <span>USA</span>
-                      </div>
+                          <div className="text-xs text-[#494139] space-y-1 pt-1">
+                            <div className="flex justify-between">
+                              <span className="text-[#756A5E]">Name</span>
+                              <span className="font-bold text-[#25211D]">{addr.fullName || fullName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-[#756A5E]">Phone</span>
+                              <span>{addr.phone || phone}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-[#756A5E]">Street</span>
+                              <span>{addr.street || addr.addressLine1}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-[#756A5E]">City / PIN</span>
+                              <span>{addr.city}, {addr.state} {addr.postalCode}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-xs text-[#756A5E] py-6 text-center mb-4">
+                      No saved addresses found. Add an address to use during checkout!
+                    </p>
+                  )}
                 </div>
 
                 <button
@@ -350,36 +423,39 @@ export default function ProfilePage() {
                     <Lock className="w-4 h-4 text-[#6B4A37]" />
                   </div>
 
-                  {/* 4 Item Preview Grid */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    {wishlistPreviews.map((item, idx) => (
-                      <Link
-                        key={idx}
-                        href={`/products/${item.product.slug}`}
-                        className="bg-[#F7F5F0] rounded-lg p-2 border border-[#463627]/10 hover:border-[#25211D] transition-colors group flex flex-col"
-                      >
-                        <div className="aspect-[4/5] bg-[#EAE6DD] rounded overflow-hidden relative mb-2">
-                          <Image
-                            src={item.product.image}
-                            alt={item.title}
-                            fill
-                            sizes="120px"
-                            className="object-cover group-hover:scale-105 transition-transform"
-                          />
-                        </div>
-                        <p className="text-[11px] font-bold text-[#25211D] truncate">
-                          {item.title}
-                        </p>
-                        <p className="text-[9px] text-[#756A5E] mb-1">{item.category}</p>
-                        <div className="flex items-baseline space-x-1 text-[10px]">
-                          <span className="font-bold text-[#25211D]">{item.price}</span>
-                          <span className="text-[#8A847C] line-through text-[9px]">
-                            {item.originalPrice}
-                          </span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
+                  {/* Item Preview Grid */}
+                  {wishlistPreviews.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      {wishlistPreviews.slice(0, 4).map((item: any, idx: number) => (
+                        <Link
+                          key={idx}
+                          href={`/products/${item.product?.slug || item.product?.id}`}
+                          className="bg-[#F7F5F0] rounded-lg p-2 border border-[#463627]/10 hover:border-[#25211D] transition-colors group flex flex-col"
+                        >
+                          <div className="aspect-[4/5] bg-[#EAE6DD] rounded overflow-hidden relative mb-2">
+                            <Image
+                              src={item.product?.imageUrl || item.product?.image || "/ABOUT_BG.png"}
+                              alt={item.title}
+                              fill
+                              sizes="120px"
+                              className="object-cover group-hover:scale-105 transition-transform"
+                            />
+                          </div>
+                          <p className="text-[11px] font-bold text-[#25211D] truncate">
+                            {item.title}
+                          </p>
+                          <p className="text-[9px] text-[#756A5E] mb-1">{item.category}</p>
+                          <div className="flex items-baseline space-x-1 text-[10px]">
+                            <span className="font-bold text-[#25211D]">{item.price}</span>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#756A5E] py-6 text-center">
+                      Your wishlist is empty. Explore our collection to save your favorite items!
+                    </p>
+                  )}
                 </div>
 
                 <Link

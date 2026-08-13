@@ -18,21 +18,44 @@ import {
   Sparkles,
   Truck,
 } from "lucide-react";
-import { catalogProducts, CatalogProduct } from "@/data/catalogProducts";
+import { CatalogProduct } from "@/data/catalogProducts";
+import { userApi, cartApi, mapBackendProduct } from "@/lib/apiClient";
+import { useAuth } from "@/lib/useAuth";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
 
 export default function WishlistPage() {
+  const { authState } = useAuth(true);
   const [wishlistItems, setWishlistItems] = useState<CatalogProduct[]>([]);
-  const [cartCount, setCartCount] = useState<number>(2);
+  const [loading, setLoading] = useState<boolean>(true);
   const [toastMessage, setToastMessage] = useState<string>("");
 
-  useEffect(() => {
-    if (catalogProducts && catalogProducts.length > 0) {
-      setWishlistItems(catalogProducts.slice(0, 6));
+  const loadWishlist = async () => {
+    setLoading(true);
+    const { data } = await userApi.getWishlist();
+    const list = data?.wishlist || data?.items;
+    if (list && Array.isArray(list)) {
+      const items = list.map((item: any) => mapBackendProduct(item.product) || item.product);
+      setWishlistItems(items.filter(Boolean));
+    } else {
+      setWishlistItems([]);
     }
-  }, []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (authState !== "AUTHENTICATED") return;
+    loadWishlist();
+  }, [authState]);
+
+  if (authState === "CHECKING") {
+    return (
+      <div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-sm font-medium text-[#25211D]">
+        Checking authentication...
+      </div>
+    );
+  }
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -40,24 +63,36 @@ export default function WishlistPage() {
   };
 
   // Remove single item from wishlist
-  const handleRemove = (productId: string) => {
+  const handleRemove = async (productId: string) => {
     setWishlistItems((prev) => prev.filter((item) => item.id !== productId));
     showToast("Item removed from your wishlist.");
+    await userApi.removeFromWishlist(productId);
+    window.dispatchEvent(new Event("yugen-state-updated"));
   };
 
   // Move single item to cart
-  const handleMoveToCart = (product: CatalogProduct) => {
+  const handleMoveToCart = async (product: CatalogProduct) => {
     setWishlistItems((prev) => prev.filter((item) => item.id !== product.id));
-    setCartCount((prev) => prev + 1);
     showToast(`Moved "${product.name}" to your shopping cart!`);
+    await userApi.removeFromWishlist(product.id);
+    const variantId = (product as any).variants?.[0]?.id || product.id;
+    await cartApi.addToCart({ variantId, quantity: 1 });
+    window.dispatchEvent(new Event("yugen-state-updated"));
   };
 
   // Move ALL items to cart
-  const handleMoveAllToCart = () => {
+  const handleMoveAllToCart = async () => {
     if (wishlistItems.length === 0) return;
-    setCartCount((prev) => prev + wishlistItems.length);
+    const current = [...wishlistItems];
     setWishlistItems([]);
     showToast("All items moved to your shopping cart!");
+
+    for (const item of current) {
+      await userApi.removeFromWishlist(item.id);
+      const variantId = (item as any).variants?.[0]?.id || item.id;
+      await cartApi.addToCart({ variantId, quantity: 1 });
+    }
+    window.dispatchEvent(new Event("yugen-state-updated"));
   };
 
   return (
@@ -117,8 +152,9 @@ export default function WishlistPage() {
         {/* Wishlist Items Grid OR Empty State */}
         {wishlistItems.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-            {wishlistItems.map((product) => {
-              const originalPrice = (product.price * 1.25).toFixed(2);
+            {wishlistItems.map((product: any) => {
+              const priceVal = product.priceNum || parseFloat((product.price || "0").replace(/[^0-9.]/g, "")) || 40;
+              const originalPrice = `₹${(priceVal * 1.25).toFixed(0)}`;
               const discountPercent = 20;
 
               return (
@@ -129,12 +165,12 @@ export default function WishlistPage() {
                   <div className="p-4 flex gap-4">
                     {/* Image Box */}
                     <Link
-                      href={`/products/${product.slug}`}
+                      href={`/products/${product.slug || product.id}`}
                       className="w-36 h-48 bg-[#EAE6DD] rounded-lg overflow-hidden relative flex-shrink-0 block"
                     >
                       <Image
-                        src={product.image}
-                        alt={product.name}
+                        src={product.imageUrl || product.image || "/ABOUT_BG.png"}
+                        alt={product.name || "Product"}
                         fill
                         sizes="150px"
                         className="object-cover group-hover:scale-105 transition-transform duration-500"
@@ -146,7 +182,7 @@ export default function WishlistPage() {
                       <div>
                         {/* Remove 'X' top right button */}
                         <div className="flex items-start justify-between">
-                          <Link href={`/products/${product.slug}`}>
+                          <Link href={`/products/${product.slug || product.id}`}>
                             <h3 className="text-xs font-semibold text-[#25211D] hover:underline truncate pr-2">
                               {product.name}
                             </h3>
@@ -160,28 +196,25 @@ export default function WishlistPage() {
                           </button>
                         </div>
 
-                        <p className="text-[10px] text-[#756A5E] mb-2">{product.gender}</p>
+                        <p className="text-[10px] text-[#756A5E] mb-2">{product.gender || "Unisex"}</p>
 
                         {/* Pricing */}
                         <div className="flex items-baseline space-x-2 mb-3">
                           <span className="text-sm font-bold text-[#25211D]">
-                            {product.formattedPrice}
+                            {product.price || `₹${priceVal}`}
                           </span>
                           <span className="text-[11px] text-[#8A847C] line-through">
-                            ${originalPrice}
-                          </span>
-                          <span className="bg-[#C0392B]/10 text-[#C0392B] text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">
-                            {discountPercent}% OFF
+                            {originalPrice}
                           </span>
                         </div>
 
                         {/* Color Selection */}
                         <div className="mb-2">
                           <p className="text-[10px] text-[#756A5E] mb-1">
-                            Color: <span className="font-medium text-[#25211D]">{product.color}</span>
+                            Color: <span className="font-medium text-[#25211D]">{product.color || "Default"}</span>
                           </p>
                           <div className="flex items-center space-x-1.5">
-                            {product.swatches.map((hex, idx) => (
+                            {(product.swatches || ["#25211D"]).map((hex: string, idx: number) => (
                               <span
                                 key={idx}
                                 style={{ backgroundColor: hex }}

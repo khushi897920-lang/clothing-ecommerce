@@ -1,9 +1,5 @@
-node_modules/
-.next/
-dist/
-build/
-.git
-.github
-Dockerfile
-docker-compose.yml
-README.md
+**/node_modules
+**/.next
+**/.git
+**/dist
+**/build

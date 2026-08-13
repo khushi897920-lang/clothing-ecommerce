@@ -1,0 +1,64 @@
+openapi: 3.0.3
+info:
+  title: YUGEN Product Service API
+  description: Catalog listing, search, filtering, product details, admin product CRUD, category CRUD, and Cloudinary uploads.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8003/products
+  - url: http://localhost:8000/api/v1/products
+paths:
+  /categories:
+    get:
+      summary: Get active categories catalog
+      responses:
+        '200':
+          description: Category list
+  /:
+    get:
+      summary: Filtered product catalog search
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: category
+          schema: { type: string }
+        - in: query
+          name: audience
+          schema: { type: string }
+        - in: query
+          name: minPrice
+          schema: { type: number }
+        - in: query
+          name: maxPrice
+          schema: { type: number }
+      responses:
+        '200':
+          description: Product list and pagination
+  /{slugOrId}:
+    get:
+      summary: Get product details by slug or ID
+      parameters:
+        - in: path
+          name: slugOrId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Product details with images and calculated stock availability
+  /admin/products:
+    post:
+      summary: Admin product creation
+      security:
+        - BearerAuth: []
+      responses:
+        '201':
+          description: Product created
+        '403':
+          description: Forbidden for CUSTOMER role
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -19,48 +19,56 @@ import {
   X,
   ExternalLink,
 } from "lucide-react";
-import { catalogProducts } from "@/data/catalogProducts";
+import { CatalogProduct } from "@/data/catalogProducts";
+import { orderApi, mapBackendProduct } from "@/lib/apiClient";
+import { useAuth } from "@/lib/useAuth";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
 
 export default function MyOrdersPage() {
+  const { authState } = useAuth(true);
   const [activeTrackingModal, setActiveTrackingModal] = useState<boolean>(false);
-  const [orders, setOrders] = useState([
-    {
-      id: "YGN-C1D2E",
-      date: "Jan 23, 2026",
-      status: "Shipped",
-      statusType: "shipped",
-      total: "$249.00",
-      item: catalogProducts[0],
-      itemName: "Linen Relaxed Shirt",
-      color: "Peach",
-      qty: 3,
-    },
-    {
-      id: "YGN-E3F4G",
-      date: "Jan 23, 2026",
-      status: "Shipped",
-      statusType: "shipped",
-      total: "$249.00",
-      item: catalogProducts[13] || catalogProducts[3],
-      itemName: "Canvas Backpack",
-      color: "Sand",
-      qty: 2,
-    },
-    {
-      id: "YGN-G5H6I",
-      date: "Jan 23, 2026",
-      status: "Delivered",
-      statusType: "delivered",
-      total: "$39.00",
-      item: catalogProducts[5] || catalogProducts[2],
-      itemName: "Oversized Cotton T-shirt",
-      color: "Olive Green",
-      qty: 1,
-    },
-  ]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (authState !== "AUTHENTICATED") return;
+
+    orderApi.getMyOrders().then(({ data }) => {
+      if (data?.orders && data.orders.length > 0) {
+        const mapped = data.orders.map((o: any) => {
+          const firstItem = o.items?.[0];
+          const v = firstItem?.variant;
+          const p = v?.product || firstItem?.product;
+          const mappedProduct = mapBackendProduct(p) || null;
+          return {
+            id: o.id,
+            date: new Date(o.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            status: o.status,
+            statusType: o.status?.toLowerCase() || "confirmed",
+            total: `₹${parseFloat(o.totalAmount || "0").toFixed(0)}`,
+            item: mappedProduct,
+            itemName: mappedProduct?.name || "YUGEN Apparel",
+            color: v?.color || "Peach",
+            qty: firstItem?.quantity || 1,
+          };
+        });
+        setOrders(mapped);
+      } else {
+        setOrders([]);
+      }
+      setLoading(false);
+    });
+  }, [authState]);
+
+  if (authState === "CHECKING") {
+    return (
+      <div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-sm font-medium text-[#25211D]">
+        Checking authentication...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F5F0] text-[#25211D] font-sans antialiased">

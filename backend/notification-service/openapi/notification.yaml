@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: YUGEN Notification Service API
+  description: Customer notifications, mark as read, and event-driven message dispatch.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8007/notifications
+  - url: http://localhost:8000/api/v1/notifications
+paths:
+  /:
+    get:
+      summary: Get customer notifications
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of notifications
+  /read-all:
+    patch:
+      summary: Mark all customer notifications as read
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All notifications marked as read
+  /{id}/read:
+    patch:
+      summary: Mark single notification as read
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Notification marked as read
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

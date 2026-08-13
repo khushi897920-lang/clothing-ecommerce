@@ -22,98 +22,123 @@ import {
   Shield,
   X,
 } from "lucide-react";
-import { catalogProducts, CatalogProduct } from "@/data/catalogProducts";
+import { cartApi, userApi, mapBackendCartItem, colorNameToHex } from "@/lib/apiClient";
+import { useAuth } from "@/lib/useAuth";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
 
 export interface CartItem {
-  product: CatalogProduct;
+  id: string;
+  productId: string;
+  variantId: string;
+  productName: string;
+  slug: string;
+  imageUrl: string;
+  unitPrice: number;
   size: string;
   color: string;
   colorHex: string;
   quantity: number;
+  lineTotal: number;
+  availableStock?: number;
 }
 
 export default function CartPage() {
   const router = useRouter();
+  const { authState } = useAuth(true);
 
-  // Initial cart populated with 5 sample items from dataset matching the screenshot
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [wishlistCount, setWishlistCount] = useState<number>(6);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [wishlistCount, setWishlistCount] = useState<number>(0);
   const [couponCode, setCouponCode] = useState<string>("");
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [couponApplied, setCouponApplied] = useState<string>("");
+  const [couponAppliedCode, setCouponAppliedCode] = useState<string>(""); // Avoid conflict
   const [couponError, setCouponError] = useState<string>("");
   const [toastMessage, setToastMessage] = useState<string>("");
 
-  useEffect(() => {
-    if (catalogProducts && catalogProducts.length >= 4) {
-      const initial: CartItem[] = [
-        {
-          product: catalogProducts[0], // Linen Shirt
-          size: "M",
-          color: "Sky Blue",
-          colorHex: "#3B5998",
-          quantity: 1,
-        },
-        {
-          product: catalogProducts[25] || catalogProducts[1], // Floral Maxi Dress
-          size: "S",
-          color: "Peach",
-          colorHex: "#E8A7B8",
-          quantity: 2,
-        },
-        {
-          product: catalogProducts[5] || catalogProducts[2], // Oversized Cotton Tee
-          size: "L",
-          color: "Olive Green",
-          colorHex: "#7B8660",
-          quantity: 1,
-        },
-        {
-          product: catalogProducts[13] || catalogProducts[3], // Relaxed Fit Trousers / Backpack
-          size: "One Size",
-          color: "Sand",
-          colorHex: "#B9A58D",
-          quantity: 1,
-        },
-      ];
-      setCartItems(initial);
+  const loadCart = async () => {
+    setLoading(true);
+    const { data } = await cartApi.getCart();
+    if (data?.cart?.items) {
+      const items: CartItem[] = data.cart.items.map((item: any) => {
+        const mapped = mapBackendCartItem(item)!;
+        return {
+          ...mapped,
+          colorHex: colorNameToHex(mapped.color),
+        };
+      });
+      setCartItems(items);
+    } else {
+      setCartItems([]);
     }
-  }, []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (authState !== "AUTHENTICATED") return;
+    loadCart();
+    userApi.getWishlist().then(({ data }) => {
+      if (data?.wishlist) {
+        setWishlistCount(data.wishlist.length);
+      }
+    });
+  }, [authState]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 3500);
   };
 
-  // Quantity updates
-  const updateQuantity = (index: number, delta: number) => {
+  // Quantity updates with backend sync
+  const updateQuantity = async (index: number, delta: number) => {
+    const item = cartItems[index];
+    const newQty = item.quantity + delta;
+
+    if (newQty <= 0) {
+      handleRemove(index);
+      return;
+    }
+
     setCartItems((prev) => {
       const updated = [...prev];
-      const newQty = updated[index].quantity + delta;
-      if (newQty <= 0) {
-        return updated.filter((_, i) => i !== index);
-      }
       updated[index].quantity = newQty;
       return updated;
     });
+
+    if (item.id) {
+      await cartApi.updateCartItem(item.id, newQty);
+      window.dispatchEvent(new Event("yugen-state-updated"));
+    }
   };
 
-  // Remove single item
-  const handleRemove = (index: number) => {
+  // Remove single item with backend sync
+  const handleRemove = async (index: number) => {
     const item = cartItems[index];
     setCartItems((prev) => prev.filter((_, i) => i !== index));
-    showToast(`Removed "${item.product.name}" from your cart.`);
+    showToast(`Removed "${item.productName}" from your cart.`);
+
+    if (item.id) {
+      await cartApi.removeCartItem(item.id);
+      window.dispatchEvent(new Event("yugen-state-updated"));
+    }
   };
 
-  // Move single item to wishlist
-  const handleMoveToWishlist = (index: number) => {
+  // Move single item to wishlist with backend sync
+  const handleMoveToWishlist = async (index: number) => {
     const item = cartItems[index];
     setCartItems((prev) => prev.filter((_, i) => i !== index));
     setWishlistCount((prev) => prev + 1);
-    showToast(`Moved "${item.product.name}" to your wishlist ♡`);
+    showToast(`Moved "${item.productName}" to your wishlist ♡`);
+
+    if (item.id) {
+      await cartApi.removeCartItem(item.id);
+    }
+    if (item.productId) {
+      await userApi.addToWishlist(item.productId);
+    }
+    window.dispatchEvent(new Event("yugen-state-updated"));
   };
 
   // Calculations
@@ -123,7 +148,7 @@ export default function CartPage() {
 
   const subtotal = useMemo(() => {
     return cartItems.reduce(
-      (sum, item) => sum + item.product.price * item.quantity,
+      (sum, item) => sum + item.unitPrice * item.quantity,
       0
     );
   }, [cartItems]);
@@ -134,7 +159,8 @@ export default function CartPage() {
 
   const shippingCost = useMemo(() => {
     if (subtotal === 0) return 0;
-    return subtotal > 70 ? 0 : 5.99;
+    // FREE shipping for premium quiet luxury above ₹5000 (roughly 70 USD equivalent, but matching INR scale)
+    return subtotal > 5000 ? 0 : 350; // In INR: ₹350 standard shipping
   }, [subtotal]);
 
   const estimatedTotal = useMemo(() => {
@@ -164,6 +190,14 @@ export default function CartPage() {
       setCouponError("Invalid promo code. Try 'YUGEN10' for 10% off.");
     }
   };
+
+  if (authState === "CHECKING") {
+    return (
+      <div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-sm font-medium text-[#25211D]">
+        Checking authentication...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F5F0] text-[#25211D] font-sans antialiased">
@@ -226,34 +260,34 @@ export default function CartPage() {
                 {/* Item Rows */}
                 <div className="divide-y divide-[#463627]/10">
                   {cartItems.map((item, idx) => {
-                    const itemTotal = (item.product.price * item.quantity).toFixed(2);
+                    const itemTotal = item.unitPrice * item.quantity;
                     return (
                       <div
-                        key={`${item.product.id}-${idx}`}
+                        key={`${item.productId}-${idx}`}
                         className="grid grid-cols-1 sm:grid-cols-12 gap-4 p-4 sm:px-6 sm:py-5 items-center hover:bg-[#EAE6DD]/30 transition-colors"
                       >
                         {/* Product Info Column */}
                         <div className="sm:col-span-5 flex items-center space-x-4">
                           <Link
-                            href={`/products/${item.product.slug}`}
+                            href={`/products/${item.slug}`}
                             className="w-16 h-20 bg-[#EAE6DD] rounded-md overflow-hidden relative flex-shrink-0 block"
                           >
                             <Image
-                              src={item.product.image}
-                              alt={item.product.name}
+                              src={item.imageUrl || "/ABOUT_BG.png"}
+                              alt={item.productName}
                               fill
                               sizes="64px"
                               className="object-cover"
                             />
                           </Link>
                           <div>
-                            <Link href={`/products/${item.product.slug}`}>
+                            <Link href={`/products/${item.slug}`}>
                               <h3 className="text-xs font-bold text-[#25211D] hover:underline mb-1">
-                                {item.product.name}
+                                {item.productName}
                               </h3>
                             </Link>
                             <p className="text-[11px] font-bold text-[#25211D] sm:hidden mb-1">
-                              {item.product.formattedPrice}
+                              ₹{item.unitPrice.toFixed(0)}
                             </p>
                             <button
                               onClick={() => handleMoveToWishlist(idx)}
@@ -285,7 +319,7 @@ export default function CartPage() {
 
                         {/* Unit Price Column */}
                         <div className="sm:col-span-1 text-right text-xs font-medium text-[#25211D] hidden sm:block">
-                          {item.product.formattedPrice}
+                          ₹{item.unitPrice.toFixed(0)}
                         </div>
 
                         {/* Quantity Stepper Column */}
@@ -313,7 +347,7 @@ export default function CartPage() {
                         {/* Item Total Column */}
                         <div className="sm:col-span-1 text-right text-xs font-bold text-[#25211D] flex sm:block justify-between">
                           <span className="sm:hidden text-[#756A5E] font-normal">Subtotal:</span>
-                          <span>${itemTotal}</span>
+                          <span>₹{itemTotal.toFixed(0)}</span>
                         </div>
 
                         {/* Trash Action Button */}
@@ -358,27 +392,27 @@ export default function CartPage() {
                 <div className="space-y-3 text-xs text-[#494139]">
                   <div className="flex justify-between">
                     <span>Subtotal ({totalItemCount} items)</span>
-                    <span className="font-bold text-[#25211D]">${subtotal.toFixed(2)}</span>
+                    <span className="font-bold text-[#25211D]">₹{subtotal.toFixed(0)}</span>
                   </div>
 
                   {discountPercent > 0 && (
                     <div className="flex justify-between text-emerald-700 font-medium">
                       <span>Discount ({couponApplied} - {discountPercent}%)</span>
-                      <span>-${discountAmount.toFixed(2)}</span>
+                      <span>-₹{discountAmount.toFixed(0)}</span>
                     </div>
                   )}
 
                   <div className="flex justify-between">
                     <span>Shipping</span>
                     <span className="text-[#756A5E]">
-                      {shippingCost === 0 ? "FREE" : `$${shippingCost.toFixed(2)}`}
+                      {shippingCost === 0 ? "FREE" : `₹${shippingCost.toFixed(0)}`}
                     </span>
                   </div>
 
                   <div className="border-t border-[#463627]/12 pt-3 flex justify-between items-baseline">
                     <span className="text-sm font-bold text-[#25211D]">Estimated Total</span>
                     <span className="text-xl font-bold text-[#25211D]">
-                      ${estimatedTotal.toFixed(2)}
+                      ₹{estimatedTotal.toFixed(0)}
                     </span>
                   </div>
                   <p className="text-[10px] text-[#756A5E] text-right">Taxes included</p>

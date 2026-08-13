@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Modal from "./Modal";
+import { productApi } from "@/lib/apiClient";
 
 type GenderCategory = "Men" | "Women" | "Unisex";
 type CategoryStatus = "Active" | "Inactive";
@@ -97,7 +98,9 @@ const STATUSES = ["All Status", "Active", "Inactive"];
 const ITEMS_PER_PAGE = 5;
 
 export default function CategoriesTable() {
-  const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES_INITIAL);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGender, setSelectedGender] = useState("All Genders");
   const [selectedStatus, setSelectedStatus] = useState("All Status");
@@ -110,6 +113,32 @@ export default function CategoriesTable() {
   const [activePage, setActivePage] = useState(1);
 
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError("");
+    productApi.getCategories().then(({ data, error: apiError }) => {
+      if (apiError) {
+        setError(apiError);
+        setCategories([]);
+      } else if (data?.categories) {
+        setCategories(
+          data.categories.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            slug: c.slug,
+            gender: "Unisex",
+            productsCount: c._count?.products || 0,
+            status: "Active",
+            image: "/images/product_cotton_tee.jpg",
+          }))
+        );
+      } else {
+        setCategories([]);
+      }
+      setLoading(false);
+    });
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -292,7 +321,19 @@ export default function CategoriesTable() {
               </tr>
             </thead>
             <tbody>
-              {paginatedCategories.length > 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-xs text-[#a39e99]">
+                    Loading categories list...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-xs text-red-500 font-semibold">
+                    Error: {error}
+                  </td>
+                </tr>
+              ) : paginatedCategories.length > 0 ? (
                 paginatedCategories.map((category) => (
                   <tr
                     key={category.id}

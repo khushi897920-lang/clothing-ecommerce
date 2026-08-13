@@ -11,8 +11,8 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@prisma/client": ["../database/node_modules/@prisma/client"],
-      "*": ["node_modules/*", "../database/node_modules/*"]
+      "@shared/*": ["shared/*"],
+      "@prisma/client": ["node_modules/@prisma/client", "../database/node_modules/@prisma/client"]
     }
   },
   "include": [

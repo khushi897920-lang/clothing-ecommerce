@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Modal from "./Modal";
+import { orderApi } from "@/lib/apiClient";
 
 type OrderStatus = "Delivered" | "Shipped" | "Processing" | "Cancelled";
 type PaymentStatus = "Paid" | "Pending";
@@ -132,6 +133,7 @@ const PAYMENT_STATUSES = ["All Payment Status", "Paid", "Pending"];
 const ITEMS_PER_PAGE = 5;
 
 export default function OrdersTable() {
+  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("All Status");
   const [selectedPayment, setSelectedPayment] = useState("All Payment Status");
@@ -145,6 +147,35 @@ export default function OrdersTable() {
 
   // Modal state
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+
+  useEffect(() => {
+    orderApi.getAdminOrders().then(({ data }) => {
+      if (data?.orders && data.orders.length > 0) {
+        setOrders(
+          data.orders.map((o: any) => ({
+            id: o.id,
+            orderId: `#${o.id.slice(0, 8)}`,
+            customer: `${o.user?.firstName || "Customer"} ${o.user?.lastName || ""}`.trim(),
+            email: o.user?.email || "customer@email.com",
+            date: new Date(o.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            time: "10:00 AM",
+            items: o.items?.length || 1,
+            amount: `₹${parseFloat(o.totalAmount || "0").toFixed(0)}`,
+            payment: o.paymentStatus === "COMPLETED" || o.paymentStatus === "PAID" ? "Paid" : "Pending",
+            status: o.status === "DELIVERED" ? "Delivered" : o.status === "SHIPPED" ? "Shipped" : o.status === "CANCELLED" ? "Cancelled" : "Processing",
+            avatarColor: "#b27a5d",
+          }))
+        );
+      }
+    });
+  }, []);
+
+  const handleUpdateStatus = async (orderId: string, newStatus: string) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId || o.orderId === orderId ? { ...o, status: newStatus as any } : o))
+    );
+    await orderApi.updateOrderStatus(orderId, newStatus.toUpperCase());
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

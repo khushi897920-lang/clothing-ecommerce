@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Modal from "./Modal";
+import { inventoryApi } from "@/lib/apiClient";
 
 type InventoryStatus = "In Stock" | "Low Stock" | "Out of Stock";
 
@@ -129,9 +130,29 @@ export default function InventoryTable() {
   const statusRef = useRef<HTMLDivElement>(null);
   const [activePage, setActivePage] = useState(1);
 
-  // Modal State
+  // Modal / Edit state
   const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
   const [newStockValue, setNewStockValue] = useState<string>("");
+
+  useEffect(() => {
+    inventoryApi.getAdminStock().then(({ data }) => {
+      if (data?.stock && data.stock.length > 0) {
+        setInventory(
+          data.stock.map((item: any) => ({
+            id: item.variantId || item.id,
+            name: item.productName || item.product?.name || "YUGEN Apparel",
+            sku: item.sku || `SKU-${(item.id || "123").slice(0, 5)}`,
+            category: item.category || "Apparel",
+            variant: { colorCode: "#3B5998", label: `${item.size || "M"} / ${item.color || "Default"}` },
+            stock: item.stockQuantity ?? item.quantity ?? 50,
+            status: (item.stockQuantity ?? item.quantity) === 0 ? "Out of Stock" : (item.stockQuantity ?? item.quantity) < 20 ? "Low Stock" : "In Stock",
+            lastUpdated: "Recently",
+            image: item.imageUrl || "/ABOUT_BG.png",
+          }))
+        );
+      }
+    });
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -181,7 +202,7 @@ export default function InventoryTable() {
     setActivePage(1);
   }, [searchQuery, selectedCategory, selectedStatus]);
 
-  const confirmAdjust = () => {
+  const confirmAdjust = async () => {
     if (adjustItem) {
       const stockNum = parseInt(newStockValue, 10);
       if (!isNaN(stockNum) && stockNum >= 0) {
@@ -194,6 +215,7 @@ export default function InventoryTable() {
           }
           return i;
         }));
+        await inventoryApi.updateAdminStock(adjustItem.id, stockNum);
       }
       setAdjustItem(null);
     }

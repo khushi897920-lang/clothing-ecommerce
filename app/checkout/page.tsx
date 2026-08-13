@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -22,38 +22,23 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { catalogProducts, CatalogProduct } from "@/data/catalogProducts";
+import { userApi, cartApi, orderApi, paymentApi, mapBackendCartItem } from "@/lib/apiClient";
+import { useAuth } from "@/lib/useAuth";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
 
-const SAVED_ADDRESSES = [
-  {
-    id: "addr-1",
-    label: "Home - Alex R.",
-    street: "1209 Sky Blvd, Home",
-    city: "New York, NY 10001",
-    isDefault: true,
-  },
-  {
-    id: "addr-2",
-    label: "Work - Alex R.",
-    street: "1209 Sky Blvd, Office 402",
-    city: "New York, NY 10001",
-    isDefault: false,
-  },
-  {
-    id: "addr-3",
-    label: "Home 2 - Alex R.",
-    street: "2029 East Garden, Home",
-    city: "Brooklyn, NY 11201",
-    isDefault: false,
-  },
-];
-
 export default function CheckoutPage() {
   const router = useRouter();
-  // Address & Payment Selection States
-  const [selectedAddressId, setSelectedAddressId] = useState<string>("addr-1");
+  const { authState } = useAuth(true);
+
+  // Dynamic Addresses & Cart State from Backend
+  const [addresses, setAddresses] = useState<any[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("");
+  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [checkoutError, setCheckoutError] = useState<string>("");
+
   const [showAddAddressModal, setShowAddAddressModal] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<"stripe" | "paypal">("stripe");
   const [deliveryMethod, setDeliveryMethod] = useState<"standard" | "express">("standard");
@@ -64,53 +49,136 @@ export default function CheckoutPage() {
   const [cvc, setCvc] = useState<string>("884");
   const [newAddrLabel, setNewAddrLabel] = useState<string>("");
   const [newAddrStreet, setNewAddrStreet] = useState<string>("");
+  const [newAddrPhone, setNewAddrPhone] = useState<string>("");
+  const [newAddrCity, setNewAddrCity] = useState<string>("New Delhi");
+  const [newAddrState, setNewAddrState] = useState<string>("Delhi");
+  const [newAddrPostalCode, setNewAddrPostalCode] = useState<string>("110001");
+  const [newAddrCountry, setNewAddrCountry] = useState<string>("India");
 
   // Order Placement State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [orderPlaced, setOrderPlaced] = useState<boolean>(false);
   const [orderId, setOrderId] = useState<string>("");
 
-  // Sample Cart Items for Checkout Order Summary (matching screenshot)
-  const items = useMemo(() => {
-    return [
-      { product: catalogProducts[0], qty: 1 }, // Linen Relaxed Shirt
-      { product: catalogProducts[25] || catalogProducts[1], qty: 1 }, // Floral Maxi Dress
-      { product: catalogProducts[5] || catalogProducts[2], qty: 1 }, // Oversized Cotton T-Shirt
-    ];
-  }, []);
+  useEffect(() => {
+    if (authState !== "AUTHENTICATED") return;
+
+    // 1. Fetch real Addresses
+    userApi.getAddresses().then(({ data }) => {
+      if (data?.addresses && data.addresses.length > 0) {
+        setAddresses(
+          data.addresses.map((a: any) => ({
+            id: a.id,
+            label: `${a.fullName || "Home"}`,
+            street: a.addressLine1 || a.street,
+            city: `${a.city}, ${a.state} ${a.postalCode}`,
+            isDefault: a.isDefault,
+          }))
+        );
+        setSelectedAddressId(data.addresses[0].id);
+      } else {
+        setAddresses([]);
+        setSelectedAddressId("");
+      }
+    });
+
+    // 2. Fetch real Cart
+    cartApi.getCart().then(({ data }) => {
+      if (data?.cart?.items) {
+        setCartItems(
+          data.cart.items.map((item: any) => mapBackendCartItem(item))
+        );
+      } else {
+        setCartItems([]);
+      }
+      setLoading(false);
+    });
+  }, [authState]);
 
   const subtotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + item.product.price * item.qty, 0);
-  }, [items]);
+    return cartItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  }, [cartItems]);
 
-  const shippingCost = deliveryMethod === "express" ? 24.0 : 14.0;
+  const shippingCost = deliveryMethod === "express" ? 600.0 : 350.0;
   const taxes = 0.0;
   const orderTotal = subtotal + shippingCost + taxes;
 
-  const handlePlaceOrder = (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setTimeout(() => {
-      const generatedId = `YG-${Math.floor(100000 + Math.random() * 900000)}`;
-      router.push(`/order-success?orderId=${generatedId}`);
-    }, 1200);
+    setCheckoutError("");
+
+    try {
+      // 1. Create real order in order-service
+      const { data: orderData, error: orderErr } = await orderApi.createOrder({
+        shippingAddressId: selectedAddressId.startsWith("addr-") ? undefined : selectedAddressId,
+        shippingAddress: {
+          street: "1209 Sky Blvd",
+          city: "New York",
+          state: "NY",
+          postalCode: "10001",
+          country: "US",
+        },
+      });
+
+      const realOrderId = orderData?.order?.id || `YG-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      // 2. Process Stripe Payment Intent
+      await paymentApi.createPaymentIntent(orderTotal, realOrderId);
+
+      // 3. Clear cart and redirect
+      await cartApi.clearCart();
+      window.dispatchEvent(new Event("yugen-state-updated"));
+
+      router.push(`/order-success?orderId=${realOrderId}`);
+    } catch (err: any) {
+      setCheckoutError(err.message || "Failed to place order. Please try again.");
+      setIsSubmitting(false);
+    }
   };
 
-  const handleAddAddressSubmit = (e: React.FormEvent) => {
+  const handleAddAddressSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAddrLabel || !newAddrStreet) return;
-    SAVED_ADDRESSES.push({
-      id: `addr-${Date.now()}`,
-      label: newAddrLabel,
-      street: newAddrStreet,
-      city: "New York, NY",
-      isDefault: false,
+    if (!newAddrLabel || !newAddrStreet || !newAddrPhone || !newAddrCity || !newAddrState || !newAddrPostalCode) return;
+
+    const { data } = await userApi.addAddress({
+      fullName: newAddrLabel,
+      phone: newAddrPhone,
+      addressLine1: newAddrStreet,
+      city: newAddrCity,
+      state: newAddrState,
+      postalCode: newAddrPostalCode,
+      country: newAddrCountry || "India",
     });
-    setSelectedAddressId(SAVED_ADDRESSES[SAVED_ADDRESSES.length - 1].id);
+
+    if (data?.address) {
+      const newAddr = {
+        id: data.address.id,
+        label: data.address.fullName || "Home",
+        street: data.address.addressLine1 || data.address.street,
+        city: `${data.address.city}, ${data.address.state} ${data.address.postalCode}`,
+        isDefault: data.address.isDefault || false,
+      };
+      setAddresses((prev) => [...prev, newAddr]);
+      setSelectedAddressId(newAddr.id);
+    }
     setShowAddAddressModal(false);
     setNewAddrLabel("");
     setNewAddrStreet("");
+    setNewAddrPhone("");
+    setNewAddrCity("New Delhi");
+    setNewAddrState("Delhi");
+    setNewAddrPostalCode("110001");
+    setNewAddrCountry("India");
   };
+
+  if (authState === "CHECKING") {
+    return (
+      <div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-sm font-medium text-[#25211D]">
+        Checking authentication...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F5F0] text-[#25211D] font-sans antialiased">
@@ -160,7 +228,7 @@ export default function CheckoutPage() {
 
                   {/* Saved Address Cards Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                    {SAVED_ADDRESSES.map((addr) => {
+                    {addresses.map((addr) => {
                       const isSelected = selectedAddressId === addr.id;
                       return (
                         <label
@@ -208,9 +276,17 @@ export default function CheckoutPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <input
                           type="text"
-                          placeholder="Label (e.g. Home - Alex R.)"
+                          placeholder="Full Name (e.g. Alex R.)"
                           value={newAddrLabel}
                           onChange={(e) => setNewAddrLabel(e.target.value)}
+                          className="bg-white border border-[#463627]/20 rounded p-2 text-xs text-[#25211D]"
+                          required
+                        />
+                        <input
+                          type="text"
+                          placeholder="Phone Number (e.g. 9876543210)"
+                          value={newAddrPhone}
+                          onChange={(e) => setNewAddrPhone(e.target.value)}
                           className="bg-white border border-[#463627]/20 rounded p-2 text-xs text-[#25211D]"
                           required
                         />
@@ -219,6 +295,38 @@ export default function CheckoutPage() {
                           placeholder="Street Address (e.g. 1209 Sky Blvd)"
                           value={newAddrStreet}
                           onChange={(e) => setNewAddrStreet(e.target.value)}
+                          className="bg-white border border-[#463627]/20 rounded p-2 text-xs text-[#25211D] sm:col-span-2"
+                          required
+                        />
+                        <input
+                          type="text"
+                          placeholder="City"
+                          value={newAddrCity}
+                          onChange={(e) => setNewAddrCity(e.target.value)}
+                          className="bg-white border border-[#463627]/20 rounded p-2 text-xs text-[#25211D]"
+                          required
+                        />
+                        <input
+                          type="text"
+                          placeholder="State"
+                          value={newAddrState}
+                          onChange={(e) => setNewAddrState(e.target.value)}
+                          className="bg-white border border-[#463627]/20 rounded p-2 text-xs text-[#25211D]"
+                          required
+                        />
+                        <input
+                          type="text"
+                          placeholder="Postal Code"
+                          value={newAddrPostalCode}
+                          onChange={(e) => setNewAddrPostalCode(e.target.value)}
+                          className="bg-white border border-[#463627]/20 rounded p-2 text-xs text-[#25211D]"
+                          required
+                        />
+                        <input
+                          type="text"
+                          placeholder="Country"
+                          value={newAddrCountry}
+                          onChange={(e) => setNewAddrCountry(e.target.value)}
                           className="bg-white border border-[#463627]/20 rounded p-2 text-xs text-[#25211D]"
                           required
                         />
@@ -397,12 +505,12 @@ export default function CheckoutPage() {
 
                   {/* Order Items List */}
                   <div className="space-y-4 border-b border-[#463627]/12 pb-5">
-                    {items.map((item, idx) => (
+                    {cartItems.map((item: any, idx: number) => (
                       <div key={idx} className="flex items-center space-x-3">
                         <div className="w-12 h-15 bg-[#EAE6DD] rounded overflow-hidden relative flex-shrink-0">
                           <Image
-                            src={item.product.image}
-                            alt={item.product.name}
+                            src={item.imageUrl || "/ABOUT_BG.png"}
+                            alt={item.productName || "Product"}
                             fill
                             sizes="48px"
                             className="object-cover"
@@ -410,13 +518,13 @@ export default function CheckoutPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-[#25211D] truncate">
-                            {item.product.name}
+                            {item.productName}
                           </p>
-                          <p className="text-[10px] text-[#756A5E]">{item.product.gender}</p>
-                          <p className="text-[10px] text-[#8A847C]">Qty: {item.qty}</p>
+                          <p className="text-[10px] text-[#756A5E]">Size: {item.size} | Color: {item.color}</p>
+                          <p className="text-[10px] text-[#8A847C]">Qty: {item.quantity}</p>
                         </div>
                         <span className="text-xs font-bold text-[#25211D]">
-                          {item.product.formattedPrice}
+                          ₹{item.unitPrice.toFixed(0)}
                         </span>
                       </div>
                     ))}
@@ -478,15 +586,15 @@ export default function CheckoutPage() {
                   <div className="space-y-2 text-xs text-[#494139] border-b border-[#463627]/12 pb-4">
                     <div className="flex justify-between">
                       <span>Subtotal</span>
-                      <span className="font-bold text-[#25211D]">${subtotal.toFixed(2)}</span>
+                      <span className="font-bold text-[#25211D]">₹{subtotal.toFixed(0)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Shipping</span>
-                      <span className="font-bold text-[#25211D]">${shippingCost.toFixed(2)}</span>
+                      <span className="font-bold text-[#25211D]">₹{shippingCost.toFixed(0)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Taxes</span>
-                      <span className="text-[#756A5E]">$0.00</span>
+                      <span className="text-[#756A5E]">₹0</span>
                     </div>
                   </div>
 
@@ -494,7 +602,7 @@ export default function CheckoutPage() {
                   <div className="flex justify-between items-baseline pt-1">
                     <span className="text-sm font-bold text-[#25211D]">Order Total</span>
                     <span className="text-2xl font-bold text-[#25211D]">
-                      ${orderTotal.toFixed(2)}
+                      ₹{orderTotal.toFixed(0)}
                     </span>
                   </div>
 

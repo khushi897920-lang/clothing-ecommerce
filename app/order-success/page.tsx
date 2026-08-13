@@ -16,12 +16,14 @@ import {
   MapPin,
   ArrowRight,
 } from "lucide-react";
-import { catalogProducts } from "@/data/catalogProducts";
+import { orderApi, mapBackendProduct } from "@/lib/apiClient";
+import { useAuth } from "@/lib/useAuth";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
 
 function OrderSuccessContent() {
+  const { authState } = useAuth(true);
   const searchParams = useSearchParams();
   const rawOrderId = searchParams.get("orderId");
 
@@ -29,38 +31,48 @@ function OrderSuccessContent() {
     return rawOrderId || "YG-984028";
   }, [rawOrderId]);
 
-  // Purchased items dataset (matching screenshot)
+  const [realOrder, setRealOrder] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    if (authState !== "AUTHENTICATED") return;
+    if (rawOrderId) {
+      orderApi.getTracking(rawOrderId).then(({ data }) => {
+        if (data?.order) {
+          setRealOrder(data.order);
+        }
+      });
+    }
+  }, [rawOrderId, authState]);
+
+  // Purchased items dataset from real order or fallback
   const purchasedItems = useMemo(() => {
-    return [
-      {
-        product: catalogProducts[0],
-        gender: "Men",
-        color: "Sky Blue",
-        color2: "Peach",
-        size: "M",
-        price: "$46.99",
-        originalPrice: "$59.00",
-      },
-      {
-        product: catalogProducts[13] || catalogProducts[3],
-        gender: "Unisex",
-        color: "Sand",
-        color2: "Olive Green",
-        size: "32",
-        price: "$49.99",
-        originalPrice: "$49.00",
-      },
-      {
-        product: catalogProducts[13] || catalogProducts[3],
-        gender: "Unisex",
-        color: "Sand",
-        color2: "",
-        size: "32",
-        price: "$39.99",
-        originalPrice: "$49.00",
-      },
-    ];
-  }, []);
+    if (realOrder?.items && realOrder.items.length > 0) {
+      return realOrder.items.map((item: any) => {
+        const v = item.variant;
+        const p = v?.product || item.product;
+        const mapped = mapBackendProduct(p);
+        if (!mapped) return null;
+        return {
+          product: mapped,
+          gender: mapped.gender || "Unisex",
+          color: v?.color || "Default",
+          color2: "",
+          size: v?.size || "M",
+          price: `₹${parseFloat(item.price || "0").toFixed(0)}`,
+          originalPrice: `₹${(parseFloat(item.price || "0") * 1.2).toFixed(0)}`,
+        };
+      });
+    }
+    return [];
+  }, [realOrder]);
+
+  if (authState === "CHECKING") {
+    return (
+      <div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center text-sm font-medium text-[#25211D]">
+        Checking authentication...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F5F0] text-[#25211D] font-sans antialiased">
@@ -113,7 +125,7 @@ function OrderSuccessContent() {
 
         {/* Purchased Items Grid (3 cards per row) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {purchasedItems.map((item, idx) => (
+          {purchasedItems.map((item: any, idx: number) => (
             <article
               key={idx}
               className="bg-[#FBFAF6] rounded-xl border border-[#463627]/12 overflow-hidden p-4 flex gap-4 shadow-xs hover:shadow-md transition-shadow"
@@ -121,8 +133,8 @@ function OrderSuccessContent() {
               {/* Product Thumbnail */}
               <div className="w-28 h-36 bg-[#EAE6DD] rounded-lg overflow-hidden relative flex-shrink-0">
                 <Image
-                  src={item.product.image}
-                  alt={item.product.name}
+                  src={item.product?.imageUrl || item.product?.image || "/ABOUT_BG.png"}
+                  alt={item.product?.name || "Product"}
                   fill
                   sizes="120px"
                   className="object-cover"

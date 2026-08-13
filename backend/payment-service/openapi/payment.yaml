@@ -1,0 +1,68 @@
+openapi: 3.0.3
+info:
+  title: YUGEN Payment Service API
+  description: Stripe Test Mode PaymentIntents, webhook, refunds, and payment state synchronization.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8006/payments
+  - url: http://localhost:8000/api/v1/payments
+paths:
+  /create:
+    post:
+      summary: Create Stripe PaymentIntent for order
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId: { type: string }
+      responses:
+        '201':
+          description: PaymentIntent created
+  /webhook:
+    post:
+      summary: Stripe webhook receiver
+      description: Verifies Stripe signature and processes payment_intent events idempotently
+      responses:
+        '200':
+          description: Event received
+        '400':
+          description: Invalid signature
+  /refund:
+    post:
+      summary: Execute Stripe test refund
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paymentId]
+              properties:
+                paymentId: { type: string }
+                amount: { type: number }
+                reason: { type: string }
+      responses:
+        '200':
+          description: Refund executed
+  /admin/all:
+    get:
+      summary: Admin payments listing
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of payments
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

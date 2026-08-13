@@ -1,0 +1,43 @@
+services:
+  # 1. Redis Cache Service
+  - type: redis
+    name: yugen-redis
+    plan: free
+    ipAllowList: [] # Private access only
+
+  # 2. Main API Gateway and Microservices Web Service
+  - type: web
+    name: yugen-backend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build --prefix backend
+    startCommand: npm start --prefix backend
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: yugen-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: yugen-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      # Placeholders for Third Party and Broker Integrations
+      - key: RABBITMQ_URL
+        value: amqps://placeholder-user:placeholder-pass@placeholder-host.rmq.cloudamqp.com/placeholder-vhost
+      - key: CORS_ORIGIN
+        value: https://yugen-clothing.vercel.app
+
+databases:
+  # 3. PostgreSQL Database
+  - name: yugen-db
+    plan: free
+    ipAllowList: [] # Private access only

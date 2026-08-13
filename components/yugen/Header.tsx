@@ -16,16 +16,18 @@ import {
   TrendingUp,
   ArrowRight,
 } from "lucide-react";
-import { catalogProducts, CatalogProduct } from "@/data/catalogProducts";
+import { authApi, cartApi, userApi, productApi, notificationApi, mapBackendProduct } from "@/lib/apiClient";
 
 export const CATEGORY_NAV_ITEMS = [
-  { label: "T-Shirts", href: "/category/t-shirts", description: "Oversized & essential tees" },
+  { label: "Oversized T-Shirts", href: "/category/oversized-tshirts", description: "Oversized & essential tees" },
   { label: "Shirts", href: "/category/shirts", description: "Linen & casual shirts" },
-  { label: "Hoodies", href: "/category/hoodies", description: "Cozy fleece & oversized hoodies" },
-  { label: "Jeans", href: "/category/jeans", description: "Slim & straight denim" },
-  { label: "Joggers", href: "/category/joggers", description: "Relaxed sweatpants & joggers" },
-  { label: "Jackets", href: "/category/jackets", description: "Outerwear & blazers" },
-  { label: "Accessories", href: "/category/accessories", description: "Caps & everyday essentials" },
+  { label: "Jackets", href: "/category/jacket", description: "Tailored blazers & jackets" },
+  { label: "Outerwear", href: "/category/outerwear", description: "Heavy coats & layering pieces" },
+  { label: "Pants", href: "/category/pants", description: "Trousers & structured pants" },
+  { label: "Bottomwear", href: "/category/bottomwear", description: "Casual sweatpants & bottoms" },
+  { label: "Activewear", href: "/category/activewear", description: "Performance & active clothing" },
+  { label: "Dresses", href: "/category/dresses", description: "Elegant dresses & single pieces" },
+  { label: "Co-ords", href: "/category/co-ord", description: "Matching two-piece sets" },
 ];
 
 const POPULAR_SEARCHES = [
@@ -49,6 +51,7 @@ export function Header() {
   // Client App States
   const [cartCount, setCartCount] = useState<number>(0);
   const [wishlistCount, setWishlistCount] = useState<number>(0);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [user, setUser] = useState<{ name?: string } | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -96,57 +99,53 @@ export function Header() {
     };
   }, [mobileMenuOpen]);
 
-  // Sync Cart, Wishlist, and User authentication state dynamically
+  // Sync Cart, Wishlist, User profile, and Notifications dynamically from backend
   useEffect(() => {
-    const syncState = () => {
+    const syncState = async () => {
       if (typeof window !== "undefined") {
-        // Auth User check
         const token = localStorage.getItem("yugen_token");
-        const storedUser = localStorage.getItem("yugen_user");
-        if (token && storedUser) {
-          try {
-            setUser(JSON.parse(storedUser));
-          } catch (e) {
-            setUser({ name: "Account" });
-          }
-        } else if (token) {
-          setUser({ name: "Account" });
+        if (token) {
+          // 1. Fetch real Profile
+          authApi.getProfile().then(({ data }) => {
+            if (data?.user) {
+              setUser(data.user);
+              localStorage.setItem("yugen_user", JSON.stringify(data.user));
+            }
+          });
+
+          // 2. Fetch real Cart
+          cartApi.getCart().then(({ data }) => {
+            if (data?.cart?.items) {
+              const total = data.cart.items.reduce((sum: number, i: any) => sum + i.quantity, 0);
+              setCartCount(total);
+            } else {
+              setCartCount(0);
+            }
+          });
+
+          // 3. Fetch real Wishlist
+          userApi.getWishlist().then(({ data }) => {
+            const list = data?.wishlist || data?.items;
+            if (list && Array.isArray(list)) {
+              setWishlistCount(list.length);
+            } else {
+              setWishlistCount(0);
+            }
+          });
+
+          // 4. Fetch real Notifications
+          notificationApi.getNotifications().then(({ data }) => {
+            if (data?.notifications) {
+              setNotifications(data.notifications);
+            } else {
+              setNotifications([]);
+            }
+          });
         } else {
           setUser(null);
-        }
-
-        // Cart Count check
-        const storedCart = localStorage.getItem("yugen_cart");
-        if (storedCart) {
-          try {
-            const items = JSON.parse(storedCart);
-            if (Array.isArray(items)) {
-              const total = items.reduce(
-                (sum: number, i: any) => sum + (i.quantity || 1),
-                0
-              );
-              setCartCount(total);
-            }
-          } catch (e) {
-            setCartCount(0);
-          }
-        } else {
           setCartCount(0);
-        }
-
-        // Wishlist Count check
-        const storedWishlist = localStorage.getItem("yugen_wishlist");
-        if (storedWishlist) {
-          try {
-            const items = JSON.parse(storedWishlist);
-            if (Array.isArray(items)) {
-              setWishlistCount(items.length);
-            }
-          } catch (e) {
-            setWishlistCount(0);
-          }
-        } else {
           setWishlistCount(0);
+          setNotifications([]);
         }
       }
     };
@@ -161,18 +160,21 @@ export function Header() {
   }, []);
 
   // Live Predictive Search Matches (max 4 suggestions)
-  const matches: CatalogProduct[] = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase().trim();
-    return catalogProducts
-      .filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q) ||
-          p.color.toLowerCase().includes(q) ||
-          p.gender.toLowerCase().includes(q)
-      )
-      .slice(0, 4);
+  const [searchMatches, setSearchMatches] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setSearchMatches([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      productApi.getCatalog({ q: query }).then(({ data }) => {
+        if (data?.products) {
+          setSearchMatches(data.products.map(mapBackendProduct).slice(0, 4));
+        }
+      });
+    }, 200);
+    return () => clearTimeout(timer);
   }, [query]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -321,9 +323,9 @@ export function Header() {
                 {query.trim() ? (
                   <div>
                     <p className="eyebrow dark mb-3">
-                      Matching Products ({matches.length})
+                      Matching Products ({searchMatches.length})
                     </p>
-                    {matches.length === 0 ? (
+                    {searchMatches.length === 0 ? (
                       <div className="py-6 text-center text-xs text-[#756A5E]">
                         No instant matches for &ldquo;{query}&rdquo;.
                         <br />
@@ -336,16 +338,16 @@ export function Header() {
                       </div>
                     ) : (
                       <div className="space-y-2.5">
-                        {matches.map((item) => (
+                        {searchMatches.map((item: any) => (
                           <Link
                             key={item.id}
-                            href={`/products/${item.slug}`}
+                            href={`/products/${item.slug || item.id}`}
                             onClick={() => setSearchOpen(false)}
                             className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#EAE6DD] transition-colors group"
                           >
                             <div className="w-10 h-12 relative bg-[#EAE6DD] rounded overflow-hidden flex-shrink-0">
                               <Image
-                                src={item.image}
+                                src={item.imageUrl || item.image || "/ABOUT_BG.png"}
                                 alt={item.name}
                                 fill
                                 sizes="40px"
@@ -361,7 +363,7 @@ export function Header() {
                               </p>
                             </div>
                             <span className="text-xs font-bold text-[#25211D]">
-                              {item.formattedPrice}
+                              {item.price}
                             </span>
                           </Link>
                         ))}

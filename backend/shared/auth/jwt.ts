@@ -1,16 +1,11 @@
 import jwt from "jsonwebtoken";
+import { TokenPayload } from "./auth.types";
 
 const JWT_SECRET = process.env.JWT_SECRET || "yugen_super_secret_jwt_key_2026";
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "yugen_super_secret_refresh_key_2026";
 
-export interface TokenPayload {
-  userId: string;
-  email: string;
-  role: "CUSTOMER" | "ADMIN";
-}
-
 export function generateAccessToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "2h" });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "15m" });
 }
 
 export function generateRefreshToken(payload: TokenPayload): string {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -23,8 +23,10 @@ import {
   ChevronRight,
   Check,
   MessageSquare,
+  RefreshCw,
 } from "lucide-react";
-import { catalogProducts, CatalogProduct } from "@/data/catalogProducts";
+import { CatalogProduct } from "@/data/catalogProducts";
+import { productApi, cartApi, userApi, mapBackendProduct, colorNameToHex } from "@/lib/apiClient";
 import { Header } from "@/components/yugen/Header";
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { Footer } from "@/components/yugen/Footer";
@@ -34,56 +36,184 @@ export default function ProductDetailPage() {
   const router = useRouter();
   const slug = (params.slug as string) || "";
 
-  // Find product by slug or id
-  const product: CatalogProduct | undefined = useMemo(() => {
-    return (
-      catalogProducts.find(
-        (p) => p.slug.toLowerCase() === slug.toLowerCase() || p.id.toLowerCase() === slug.toLowerCase()
-      ) || catalogProducts[0]
-    );
-  }, [slug]);
+  // Dynamic Product & Variants State from Backend
+  const [backendProduct, setBackendProduct] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
+  const [cartError, setCartError] = useState<string>("");
+  const [cartSuccess, setCartSuccess] = useState<boolean>(false);
+  const [isWishlisted, setIsWishlisted] = useState<boolean>(false);
 
   // Interactive States
-  const [selectedSize, setSelectedSize] = useState<string>(
-    product?.sizes[0] || "M"
-  );
-  const [selectedColor, setSelectedColor] = useState<string>(
-    product?.color || "Beige"
-  );
+  const [selectedSize, setSelectedSize] = useState<string>("M");
+  const [selectedColor, setSelectedColor] = useState<string>("Beige");
   const [quantity, setQuantity] = useState<number>(1);
   const [activeThumb, setActiveThumb] = useState<number>(0);
-  const [isWishlisted, setIsWishlisted] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"description" | "details" | "delivery" | "reviews">("description");
-  const [cartSuccess, setCartSuccess] = useState<boolean>(false);
 
-  if (!product) {
+  // Fetch real product by slug/ID on mount
+  useEffect(() => {
+    if (slug) {
+      setLoading(true);
+      setError("");
+      setActiveThumb(0); // Reset thumbnail/showcase image selection on new page load!
+      setQuantity(1);    // Reset quantity selection!
+      productApi.getProductBySlug(slug).then(({ data, error: apiError }) => {
+        if (data?.product) {
+          setBackendProduct(data.product);
+          const variants = data.product.variants || [];
+          if (variants.length > 0) {
+            setSelectedSize(variants[0].size || "M");
+            setSelectedColor(variants[0].color || "Beige");
+          }
+        } else {
+          setBackendProduct(null);
+          setError(apiError || "Product not found");
+        }
+        setLoading(false);
+      });
+    }
+  }, [slug]);
+
+  // Fetch wishlist status
+  useEffect(() => {
+    if (backendProduct?.id) {
+      userApi.getWishlist().then(({ data }) => {
+        const list = data?.wishlist || data?.items;
+        if (list && Array.isArray(list)) {
+          const inWishlist = list.some((w: any) => (w.productId || w.product?.id) === backendProduct.id);
+          setIsWishlisted(inWishlist);
+        }
+      });
+    }
+  }, [backendProduct?.id]);
+
+  const product: any = useMemo(() => {
+    return backendProduct ? mapBackendProduct(backendProduct) : null;
+  }, [backendProduct]);
+
+  // Calculate pricing & thumbnails from real mapped product
+  const discountPercent = 20;
+  const originalPrice = product ? (((product as any)?.priceNum || 40) * 1.25).toFixed(0) : "0";
+  const img = product ? ((product as any)?.imageUrl || product?.image || "/ABOUT_BG.png") : "/ABOUT_BG.png";
+  // Use real images array from mapper; fill to at least 1 image
+  const productImages: string[] = (product as any)?.images?.length > 0
+    ? (product as any).images
+    : [img];
+  const thumbnails = productImages;
+
+  // Resolve dynamic colors and sizes from backend product variants
+  const colorMap: any[] = useMemo(() => {
+    if (!backendProduct?.variants) return [];
+    const colors: Record<string, string> = {};
+    backendProduct.variants.forEach((v: any) => {
+      if (v.color) {
+        colors[v.color] = colorNameToHex(v.color);
+      }
+    });
+    return Object.entries(colors).map(([name, hex]) => ({ name, hex }));
+  }, [backendProduct]);
+
+  const availableSizes: string[] = useMemo(() => {
+    if (!backendProduct?.variants) return [];
+    return Array.from(
+      new Set(
+        backendProduct.variants
+          .filter((v: any) => v.color === selectedColor)
+          .map((v: any) => (v.size as string))
+      )
+    );
+  }, [backendProduct, selectedColor]);
+
+  // Dynamically keep selected size valid when selected color changes
+  useEffect(() => {
+    if (availableSizes.length > 0 && !availableSizes.includes(selectedSize)) {
+      setSelectedSize(availableSizes[0]);
+    }
+  }, [selectedColor, availableSizes, selectedSize]);
+
+  // Identify exact Variant ID from backend product variants
+  const selectedVariant = useMemo(() => {
+    if (!backendProduct?.variants) return null;
+    return backendProduct.variants.find(
+      (v: any) => v.size === selectedSize && v.color === selectedColor
+    ) || null;
+  }, [backendProduct, selectedSize, selectedColor]);
+
+  const isOutOfStock = !selectedVariant || (selectedVariant.stockQuantity || 0) <= 0;
+
+  const toggleWishlist = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!product?.id) return;
+    if (isWishlisted) {
+      setIsWishlisted(false);
+      await userApi.removeFromWishlist(product.id);
+    } else {
+      setIsWishlisted(true);
+      await userApi.addToWishlist(product.id);
+    }
+    window.dispatchEvent(new Event("yugen-state-updated"));
+  };
+
+  const handleAddToCart = async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("yugen_token") : null;
+    if (!token) {
+      router.push("/signin");
+      return;
+    }
+
+    setCartError("");
+    const variantId = selectedVariant?.id;
+    if (!variantId && backendProduct?.id) {
+      setCartError("Please select a valid size and color combination.");
+      return;
+    }
+
+    const { data, error } = await cartApi.addToCart({
+      variantId: variantId || product?.id,
+      quantity,
+    });
+
+    if (error) {
+      setCartError(error);
+      return;
+    }
+
+    setCartSuccess(true);
+    window.dispatchEvent(new Event("yugen-state-updated"));
+    setTimeout(() => setCartSuccess(false), 4000);
+  };
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-[#F7F5F0] flex flex-col items-center justify-center p-8">
-        <h1 className="text-2xl font-serif text-[#25211D] mb-4">Product Not Found</h1>
-        <Link href="/products" className="bg-[#25211D] text-white px-6 py-2.5 rounded-full text-xs font-medium uppercase">
-          Back to Catalog
-        </Link>
+      <div className="min-h-screen bg-[#F7F5F0] text-[#25211D] font-sans antialiased flex flex-col justify-between">
+        <Header />
+        <main className="max-w-[1440px] mx-auto px-6 lg:px-12 py-24 flex flex-col items-center justify-center flex-grow">
+          <RefreshCw className="w-8 h-8 text-[#6B4A37] animate-spin mb-4" />
+          <p className="text-sm font-medium text-[#756A5E]">Loading product details...</p>
+        </main>
+        <Footer />
       </div>
     );
   }
 
-  // Calculate pricing & discount
-  const originalPrice = (product.price * 1.25).toFixed(2);
-  const discountPercent = 20;
-
-  // Generate thumbnail gallery (using main product image and related dataset angles)
-  const thumbnails = [
-    product.image,
-    product.image,
-    product.image,
-    product.image,
-    product.image,
-  ];
-
-  const handleAddToCart = () => {
-    setCartSuccess(true);
-    setTimeout(() => setCartSuccess(false), 3000);
-  };
+  if (error || !product) {
+    return (
+      <div className="min-h-screen bg-[#F7F5F0] text-[#25211D] font-sans antialiased flex flex-col justify-between">
+        <Header />
+        <main className="max-w-[1440px] mx-auto px-6 lg:px-12 py-24 flex flex-col items-center justify-center flex-grow">
+          <p className="text-2xl font-normal text-red-700 mb-2 uppercase" style={{ fontFamily: '"Poiret One", sans-serif' }}>
+            Product Not Found
+          </p>
+          <p className="text-[12px] text-[#756A5E] mb-6">{error || "The requested product could not be loaded."}</p>
+          <Link href="/products" className="bg-[#25211D] text-white text-[11px] px-6 py-2.5 rounded-full font-medium uppercase tracking-wider">
+            Back to Products
+          </Link>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F5F0] text-[#25211D] font-sans antialiased">
@@ -215,10 +345,10 @@ export default function ProductDetailPage() {
               {/* Pricing Box */}
               <div className="flex items-baseline space-x-3 mb-2">
                 <span className="text-2xl font-bold text-[#C0392B]">
-                  {product.formattedPrice}
+                  {product.price || product.formattedPrice}
                 </span>
                 <span className="text-sm text-[#8A847C] line-through">
-                  ${originalPrice}
+                  ₹{originalPrice}
                 </span>
                 <span className="bg-[#C0392B]/10 text-[#C0392B] text-[10px] font-bold px-2 py-0.5 rounded uppercase">
                   {discountPercent}% OFF
@@ -228,7 +358,7 @@ export default function ProductDetailPage() {
 
               {/* Product Description */}
               <p className="text-[13px] text-[#494139] leading-relaxed mb-6">
-                Crafted from premium {product.color.toLowerCase()} fabrics, this {product.name.toLowerCase()} is breathable, lightweight, and tailored for everyday elegance. A timeless essential for your quiet-luxury wardrobe.
+                Crafted from premium {selectedColor.toLowerCase()} fabrics, this {product.name.toLowerCase()} is breathable, lightweight, and tailored for everyday elegance. A timeless essential for your quiet-luxury wardrobe.
               </p>
             </div>
 
@@ -240,16 +370,24 @@ export default function ProductDetailPage() {
                 </span>
               </div>
               <div className="flex items-center space-x-3">
-                {product.swatches.map((hex, idx) => (
+                {colorMap.map((c) => (
                   <button
-                    key={idx}
-                    onClick={() => setSelectedColor(idx === 0 ? product.color : "Cream")}
+                    key={c.name}
+                    onClick={() => {
+                      setSelectedColor(c.name);
+                      // Auto select first available size for this color if current size is not available
+                      const matches = backendProduct?.variants?.filter((v: any) => v.color === c.name) || [];
+                      if (matches.length > 0 && !matches.some((v: any) => v.size === selectedSize)) {
+                        setSelectedSize(matches[0].size);
+                      }
+                    }}
                     className={`w-8 h-8 rounded-full border border-black/15 transition-all ${
-                      (idx === 0 && selectedColor === product.color) || (idx > 0 && selectedColor !== product.color)
+                      selectedColor === c.name
                         ? "ring-2 ring-offset-2 ring-[#25211D] scale-110"
                         : "hover:scale-105 opacity-85"
                     }`}
-                    style={{ backgroundColor: hex }}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
                   />
                 ))}
               </div>
@@ -267,7 +405,7 @@ export default function ProductDetailPage() {
                 </button>
               </div>
               <div className="grid grid-cols-6 gap-2">
-                {product.sizes.map((size) => (
+                {availableSizes.map((size) => (
                   <button
                     key={size}
                     onClick={() => setSelectedSize(size)}
@@ -308,13 +446,18 @@ export default function ProductDetailPage() {
               <div className="flex items-center space-x-3 pt-2">
                 <button
                   onClick={handleAddToCart}
-                  className="flex-1 bg-[#25211D] hover:bg-[#38342F] text-white text-xs font-semibold py-3.5 px-6 rounded-md uppercase tracking-wider transition-colors shadow-md flex items-center justify-center space-x-2"
+                  disabled={isOutOfStock}
+                  className={`flex-1 text-white text-xs font-semibold py-3.5 px-6 rounded-md uppercase tracking-wider transition-colors shadow-md flex items-center justify-center space-x-2 ${
+                    isOutOfStock
+                      ? "bg-gray-400 cursor-not-allowed shadow-none"
+                      : "bg-[#25211D] hover:bg-[#38342F]"
+                  }`}
                 >
                   <ShoppingBag className="w-4 h-4" />
-                  <span>Add to Cart</span>
+                  <span>{isOutOfStock ? "Out of Stock" : "Add to Cart"}</span>
                 </button>
                 <button
-                  onClick={() => setIsWishlisted(!isWishlisted)}
+                  onClick={toggleWishlist}
                   className={`p-3.5 border rounded-md transition-colors flex items-center justify-center space-x-2 text-xs font-medium ${
                     isWishlisted
                       ? "bg-red-500 text-white border-red-500"
@@ -325,6 +468,11 @@ export default function ProductDetailPage() {
                   <span className="hidden sm:inline">Add to Wishlist</span>
                 </button>
               </div>
+              {cartError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-700 rounded text-xs font-medium">
+                  {cartError}
+                </div>
+              )}
             </div>
 
             {/* Service Guarantee Banner */}

@@ -1,3 +1,5 @@
+"use client";
+
 import { BrandValues } from "@/components/yugen/BrandValues";
 import { CollectionFeature } from "@/components/yugen/CollectionFeature";
 import { Footer } from "@/components/yugen/Footer";

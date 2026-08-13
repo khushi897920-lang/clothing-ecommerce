@@ -23,6 +23,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ecommerce"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - ecommerce-network
 
@@ -33,6 +38,11 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - ecommerce-network
 
@@ -44,5 +54,213 @@ services:
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ecommerce-network
+
+  # Backend Microservices
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./backend/auth-service/Dockerfile
+    container_name: clothing-auth-service
+    environment:
+      PORT: 8001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ecommerce}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-super_secret_refresh_jwt_key}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  user-service:
+    build:
+      context: .
+      dockerfile: ./backend/user-service/Dockerfile
+    container_name: clothing-user-service
+    environment:
+      PORT: 8002
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ecommerce}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key}
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8002:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  product-service:
+    build:
+      context: .
+      dockerfile: ./backend/product-service/Dockerfile
+    container_name: clothing-product-service
+    environment:
+      PORT: 8003
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ecommerce}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key}
+      REDIS_URL: redis://redis:6379
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-cloudinary_placeholder}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-key_placeholder}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-secret_placeholder}
+    ports:
+      - "8003:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: ./backend/inventory-service/Dockerfile
+    container_name: clothing-inventory-service
+    environment:
+      PORT: 8004
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ecommerce}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "8004:8004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  order-service:
+    build:
+      context: .
+      dockerfile: ./backend/order-service/Dockerfile
+    container_name: clothing-order-service
+    environment:
+      PORT: 8005
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ecommerce}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "8005:8005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: ./backend/payment-service/Dockerfile
+    container_name: clothing-payment-service
+    environment:
+      PORT: 8006
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ecommerce}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "8006:8006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./backend/notification-service/Dockerfile
+    container_name: clothing-notification-service
+    environment:
+      PORT: 8007
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ecommerce}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+      SMTP_HOST: ${SMTP_HOST:-smtp.mailtrap.io}
+      SMTP_PORT: ${SMTP_PORT:-2525}
+      SMTP_USER: ${SMTP_USER:-smtp_user_placeholder}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-smtp_password_placeholder}
+    ports:
+      - "8007:8007"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./backend/api-gateway/Dockerfile
+    container_name: clothing-api-gateway
+    environment:
+      PORT: 8000
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key}
+      AUTH_SERVICE_URL: http://auth-service:8001
+      USER_SERVICE_URL: http://user-service:8002
+      PRODUCT_SERVICE_URL: http://product-service:8003
+      INVENTORY_SERVICE_URL: http://inventory-service:8004
+      ORDER_SERVICE_URL: http://order-service:8005
+      PAYMENT_SERVICE_URL: http://payment-service:8006
+      NOTIFICATION_SERVICE_URL: http://notification-service:8007
+    ports:
+      - "8000:8000"
+    depends_on:
+      - auth-service
+      - user-service
+      - product-service
+      - inventory-service
+      - order-service
+      - payment-service
+      - notification-service
+    networks:
+      - ecommerce-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clothing-frontend
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
     networks:
       - ecommerce-network

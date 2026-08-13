@@ -1,0 +1,84 @@
+openapi: 3.0.3
+info:
+  title: YUGEN Order & Cart Service API
+  description: Shopping cart, checkout, order state machine, and admin order management.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8005/orders
+  - url: http://localhost:8000/api/v1/orders
+paths:
+  /cart:
+    get:
+      summary: Get active customer shopping cart
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cart items and subtotal
+    post:
+      summary: Add item to cart
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Item added
+  /orders:
+    post:
+      summary: Checkout active cart and create order
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                addressId: { type: string }
+      responses:
+        '201':
+          description: Order placed
+        '409':
+          description: Insufficient stock
+  /orders/me:
+    get:
+      summary: Get current customer orders
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of customer orders
+  /orders/admin/all:
+    get:
+      summary: Admin order listing
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of all orders
+  /orders/admin/orders/{id}/status:
+    patch:
+      summary: Admin update order status
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [CONFIRMED, PACKED, SHIPPED, DELIVERED, CANCELLED]
+      responses:
+        '200':
+          description: Status updated
+        '400':
+          description: Invalid transition
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
