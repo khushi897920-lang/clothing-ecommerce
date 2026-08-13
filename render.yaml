@@ -10,8 +10,8 @@ services:
     name: yugen-backend
     env: node
     plan: free
-    buildCommand: cd backend && npm install --include=dev && npm run build
-    startCommand: cd backend && npm start
+    buildCommand: npm install --prefix database && npm install --include=dev --prefix backend && npm run build --prefix backend
+    startCommand: npm start --prefix backend
     envVars:
       - key: PORT
         value: 10000
