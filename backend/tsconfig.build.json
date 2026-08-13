@@ -1,8 +1,30 @@
 {
-  "extends": "./tsconfig.json",
   "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["es2022"],
+    "strict": false,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
     "outDir": "./dist",
-    "rootDir": "."
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": false
   },
+  "include": [
+    "shared/**/*.ts",
+    "api-gateway/**/*.ts",
+    "auth-service/**/*.ts",
+    "user-service/**/*.ts",
+    "product-service/**/*.ts",
+    "inventory-service/**/*.ts",
+    "order-service/**/*.ts",
+    "payment-service/**/*.ts",
+    "notification-service/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/__tests__/**"]
 }
+

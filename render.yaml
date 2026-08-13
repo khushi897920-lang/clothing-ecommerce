@@ -10,7 +10,7 @@ services:
     name: yugen-backend
     env: node
     plan: free
-    buildCommand: npm install && npm run build --prefix backend
+    buildCommand: "cd database && npm install && npx prisma generate && cd ../backend && npm install --include=dev && ./node_modules/.bin/tsc -p tsconfig.build.json"
     startCommand: npm start --prefix backend
     envVars:
       - key: PORT
@@ -34,7 +34,7 @@ services:
       - key: RABBITMQ_URL
         value: amqps://placeholder-user:placeholder-pass@placeholder-host.rmq.cloudamqp.com/placeholder-vhost
       - key: CORS_ORIGIN
-        value: https://yugen-clothing.vercel.app
+        value: https://clothing-ecommerce-five-pi.vercel.app
 
 databases:
   # 3. PostgreSQL Database

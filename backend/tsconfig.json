@@ -8,12 +8,7 @@
     "noImplicitAny": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
-    "paths": {
-      "@shared/*": ["shared/*"],
-      "@prisma/client": ["node_modules/@prisma/client", "../database/node_modules/@prisma/client"]
-    }
+    "forceConsistentCasingInFileNames": true
   },
   "include": [
     "**/*.ts",
@@ -29,3 +24,4 @@
   ],
   "exclude": ["node_modules", "dist"]
 }
+
