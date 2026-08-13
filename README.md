@@ -29,8 +29,8 @@
 </p>
 
 <p align="center">
-  <a href="YOUR_LIVE_LINK">
-    <img src="https://img.shields.io/badge/🌐_Live_Demo-YUGEN-111111?style=for-the-badge" alt="https://clothing-ecommerce-five-pi.vercel.app/" />
+  <a href="https://clothing-ecommerce-five-pi.vercel.app">
+    <img src="https://img.shields.io/badge/🌐_Live_Demo-YUGEN-111111?style=for-the-badge" alt="Live demo" />
   </a>
 </p>
 
