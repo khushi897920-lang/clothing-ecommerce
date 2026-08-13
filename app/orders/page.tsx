@@ -41,23 +41,17 @@ export default function MyOrdersPage() {
           const firstItem = o.items?.[0];
           const v = firstItem?.variant;
           const p = v?.product || firstItem?.product;
-          const mappedProduct = p ? mapBackendProduct(p) : null;
-          const imageUrl = mappedProduct?.image || mappedProduct?.imageUrl || firstItem?.imageUrl || firstItem?.image || "/ABOUT_BG.png";
-          const itemName = mappedProduct?.name || firstItem?.productName || firstItem?.name || "YUGEN Apparel";
-          const color = v?.color || firstItem?.color || "Peach";
-          const qty = firstItem?.quantity || 1;
-
+          const mappedProduct = mapBackendProduct(p) || null;
           return {
             id: o.id,
             date: new Date(o.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-            status: o.status || "CONFIRMED",
-            statusType: (o.status || "confirmed").toLowerCase(),
-            total: typeof o.totalAmount === "string" || typeof o.totalAmount === "number" ? `₹${parseFloat(String(o.totalAmount || "0")).toFixed(0)}` : "₹0",
+            status: o.status,
+            statusType: o.status?.toLowerCase() || "confirmed",
+            total: `₹${parseFloat(o.totalAmount || "0").toFixed(0)}`,
             item: mappedProduct,
-            imageUrl,
-            itemName,
-            color,
-            qty,
+            itemName: mappedProduct?.name || "YUGEN Apparel",
+            color: v?.color || "Peach",
+            qty: firstItem?.quantity || 1,
           };
         });
         setOrders(mapped);
@@ -254,7 +248,7 @@ export default function MyOrdersPage() {
                   <div className="flex items-center space-x-3 pt-1">
                     <div className="w-12 h-15 bg-[#EAE6DD] rounded overflow-hidden relative flex-shrink-0">
                       <Image
-                        src={ord.imageUrl || ord.item?.image || "/ABOUT_BG.png"}
+                        src={ord.item.image}
                         alt={ord.itemName}
                         fill
                         sizes="48px"

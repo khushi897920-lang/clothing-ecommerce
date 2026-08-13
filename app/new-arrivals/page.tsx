@@ -114,7 +114,7 @@ export default function NewArrivalsPage() {
       // Color Filter
       if (
         selectedColor !== "All Colors" &&
-        !(product.color || "").toLowerCase().includes(selectedColor.toLowerCase())
+        !product.color.toLowerCase().includes(selectedColor.toLowerCase())
       ) {
         return false;
       }

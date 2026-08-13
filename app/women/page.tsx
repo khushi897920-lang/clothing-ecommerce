@@ -173,8 +173,8 @@ export default function WomenCollectionPage() {
       // Search Query
       if (
         searchQuery &&
-        !(product.name || "").toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !(product.category || "").toLowerCase().includes(searchQuery.toLowerCase())
+        !product.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !product.category.toLowerCase().includes(searchQuery.toLowerCase())
       ) {
         return false;
       }

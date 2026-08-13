@@ -61,14 +61,10 @@ export default function ProductDetailPage() {
       productApi.getProductBySlug(slug).then(({ data, error: apiError }) => {
         if (data?.product) {
           setBackendProduct(data.product);
-          const mapped = mapBackendProduct(data.product);
           const variants = data.product.variants || [];
           if (variants.length > 0) {
             setSelectedSize(variants[0].size || "M");
             setSelectedColor(variants[0].color || "Beige");
-          } else if (mapped) {
-            setSelectedSize(mapped.sizes[0] || "M");
-            setSelectedColor(mapped.colors[0] || mapped.color || "Beige");
           }
         } else {
           setBackendProduct(null);
@@ -85,7 +81,7 @@ export default function ProductDetailPage() {
       userApi.getWishlist().then(({ data }) => {
         const list = data?.wishlist || data?.items;
         if (list && Array.isArray(list)) {
-          const inWishlist = list.some((w: any) => (w.productId || w.product?.id || w.id) === (backendProduct.id || `w-${backendProduct.id}`));
+          const inWishlist = list.some((w: any) => (w.productId || w.product?.id) === backendProduct.id);
           setIsWishlisted(inWishlist);
         }
       });
@@ -106,33 +102,28 @@ export default function ProductDetailPage() {
     : [img];
   const thumbnails = productImages;
 
-  // Resolve dynamic colors and sizes from backend product variants or mapped product
+  // Resolve dynamic colors and sizes from backend product variants
   const colorMap: any[] = useMemo(() => {
-    if (backendProduct?.variants && backendProduct.variants.length > 0) {
-      const colors: Record<string, string> = {};
-      backendProduct.variants.forEach((v: any) => {
-        if (v.color) {
-          colors[v.color] = colorNameToHex(v.color);
-        }
-      });
-      return Object.entries(colors).map(([name, hex]) => ({ name, hex }));
-    }
-    const mappedColors = product?.colors || [product?.color || "Beige"];
-    return mappedColors.map((c: string) => ({ name: c, hex: colorNameToHex(c) }));
-  }, [backendProduct, product]);
+    if (!backendProduct?.variants) return [];
+    const colors: Record<string, string> = {};
+    backendProduct.variants.forEach((v: any) => {
+      if (v.color) {
+        colors[v.color] = colorNameToHex(v.color);
+      }
+    });
+    return Object.entries(colors).map(([name, hex]) => ({ name, hex }));
+  }, [backendProduct]);
 
   const availableSizes: string[] = useMemo(() => {
-    if (backendProduct?.variants && backendProduct.variants.length > 0) {
-      return Array.from(
-        new Set(
-          backendProduct.variants
-            .filter((v: any) => v.color === selectedColor)
-            .map((v: any) => (v.size as string))
-        )
-      );
-    }
-    return product?.sizes || ["S", "M", "L", "XL", "XXL"];
-  }, [backendProduct, selectedColor, product]);
+    if (!backendProduct?.variants) return [];
+    return Array.from(
+      new Set(
+        backendProduct.variants
+          .filter((v: any) => v.color === selectedColor)
+          .map((v: any) => (v.size as string))
+      )
+    );
+  }, [backendProduct, selectedColor]);
 
   // Dynamically keep selected size valid when selected color changes
   useEffect(() => {
@@ -141,25 +132,15 @@ export default function ProductDetailPage() {
     }
   }, [selectedColor, availableSizes, selectedSize]);
 
-  // Identify exact Variant ID from backend product variants or construct a virtual variant
+  // Identify exact Variant ID from backend product variants
   const selectedVariant = useMemo(() => {
-    if (backendProduct?.variants && backendProduct.variants.length > 0) {
-      return backendProduct.variants.find(
-        (v: any) => v.size === selectedSize && v.color === selectedColor
-      ) || null;
-    }
-    if (product) {
-      return {
-        id: `${product.id}-${selectedColor}-${selectedSize}`,
-        size: selectedSize,
-        color: selectedColor,
-        stockQuantity: product.availableStock ?? product.stockQuantity ?? 50,
-      };
-    }
-    return null;
-  }, [backendProduct, selectedSize, selectedColor, product]);
+    if (!backendProduct?.variants) return null;
+    return backendProduct.variants.find(
+      (v: any) => v.size === selectedSize && v.color === selectedColor
+    ) || null;
+  }, [backendProduct, selectedSize, selectedColor]);
 
-  const isOutOfStock = product ? (product.inStock === false || (product.availableStock !== undefined && product.availableStock <= 0 && (!selectedVariant || selectedVariant.stockQuantity <= 0))) : true;
+  const isOutOfStock = !selectedVariant || (selectedVariant.stockQuantity || 0) <= 0;
 
   const toggleWishlist = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -182,18 +163,15 @@ export default function ProductDetailPage() {
     }
 
     setCartError("");
-    const variantId = selectedVariant?.id || `${product?.id}-${selectedColor}-${selectedSize}`;
-    if (!variantId && !product?.id) {
+    const variantId = selectedVariant?.id;
+    if (!variantId && backendProduct?.id) {
       setCartError("Please select a valid size and color combination.");
       return;
     }
 
     const { data, error } = await cartApi.addToCart({
-      variantId,
-      productId: product?.id,
+      variantId: variantId || product?.id,
       quantity,
-      size: selectedSize,
-      color: selectedColor,
     });
 
     if (error) {
@@ -380,7 +358,7 @@ export default function ProductDetailPage() {
 
               {/* Product Description */}
               <p className="text-[13px] text-[#494139] leading-relaxed mb-6">
-                Crafted from premium {(selectedColor || "").toLowerCase()} fabrics, this {(product.name || "").toLowerCase()} is breathable, lightweight, and tailored for everyday elegance. A timeless essential for your quiet-luxury wardrobe.
+                Crafted from premium {selectedColor.toLowerCase()} fabrics, this {product.name.toLowerCase()} is breathable, lightweight, and tailored for everyday elegance. A timeless essential for your quiet-luxury wardrobe.
               </p>
             </div>
 
@@ -558,7 +536,7 @@ export default function ProductDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-xs text-[#494139] leading-relaxed">
                 <div>
                   <p className="mb-4">
-                    Minimal, breathable, and effortlessly stylish — this {(product.name || "").toLowerCase()} is your go-to for a relaxed yet polished look. Designed with a loose fit, button-down front, and classic collar.
+                    Minimal, breathable, and effortlessly stylish — this {product.name.toLowerCase()} is your go-to for a relaxed yet polished look. Designed with a loose fit, button-down front, and classic collar.
                   </p>
                   <ul className="space-y-2 list-disc list-inside text-[#25211D]">
                     <li>Relaxed fit for all-day comfort</li>

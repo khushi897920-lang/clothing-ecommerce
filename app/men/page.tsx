@@ -165,8 +165,8 @@ export default function MenCollectionPage() {
       // Category filter
       if (selectedCategory !== "All Men") {
         const cat = selectedCategory.toLowerCase();
-        const pCat = (product.category || "").toLowerCase();
-        const pName = (product.name || "").toLowerCase();
+        const pCat = product.category.toLowerCase();
+        const pName = product.name.toLowerCase();
         if (!pCat.includes(cat) && !pName.includes(cat)) {
           return false;
         }

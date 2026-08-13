@@ -219,8 +219,8 @@ export default function ProductsPage() {
       // Search
       if (
         searchQuery &&
-        !(product.name || "").toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !(product.category || "").toLowerCase().includes(searchQuery.toLowerCase())
+        !product.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !product.category.toLowerCase().includes(searchQuery.toLowerCase())
       ) {
         return false;
       }

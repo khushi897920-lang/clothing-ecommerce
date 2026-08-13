@@ -222,8 +222,8 @@ export default function CategoryPage() {
   // Filter Products for Current Category
   const categoryProducts = useMemo(() => {
     return products.filter((product) => {
-      const pCat = (product.category || "").toLowerCase();
-      const pName = (product.name || "").toLowerCase();
+      const pCat = product.category.toLowerCase();
+      const pName = product.name.toLowerCase();
 
       // Check category match criteria
       const matchesCategory = categoryInfo.matches.some(
