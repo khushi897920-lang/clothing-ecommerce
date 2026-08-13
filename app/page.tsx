@@ -40,7 +40,7 @@ export default function Home() {
             </>
           }
           cta="Explore Men"
-          image="/assets/explore men collection.png"
+          image="/assets/yugen-men-hero.jpg"
           imageAlt="Man in a dark short-sleeve shirt and white trousers"
           variant="men"
           href="/men"
