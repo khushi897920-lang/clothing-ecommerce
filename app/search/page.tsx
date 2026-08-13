@@ -209,13 +209,13 @@ function SearchContent() {
     const queryTerms = q.split(/\s+/);
 
     return products.filter((product) => {
-      const name = product.name.toLowerCase();
-      const cat = product.category.toLowerCase();
-      const sub = product.subType.toLowerCase();
-      const color = product.color.toLowerCase();
-      const gender = product.gender.toLowerCase();
-      const pattern = product.pattern.toLowerCase();
-      const fit = product.fit.toLowerCase();
+      const name = (product.name || "").toLowerCase();
+      const cat = (product.category || "").toLowerCase();
+      const sub = (product.subType || "").toLowerCase();
+      const color = (product.color || "").toLowerCase();
+      const gender = (product.gender || "").toLowerCase();
+      const pattern = (product.pattern || "").toLowerCase();
+      const fit = (product.fit || "").toLowerCase();
 
       const fullString = `${name} ${cat} ${sub} ${color} ${gender} ${pattern} ${fit}`;
 
@@ -234,8 +234,8 @@ function SearchContent() {
         selectedCategories.length > 0 &&
         !selectedCategories.some(
           (c) =>
-            product.category.toLowerCase().includes(c.toLowerCase()) ||
-            c.toLowerCase().includes(product.category.toLowerCase())
+            (product.category || "").toLowerCase().includes(c.toLowerCase()) ||
+            c.toLowerCase().includes((product.category || "").toLowerCase())
         )
       ) {
         return false;
@@ -407,7 +407,7 @@ function SearchContent() {
                 <div className="space-y-2.5">
                   {CATEGORIES.map((cat) => {
                     const count = searchResults.filter((p) =>
-                      p.category.toLowerCase().includes(cat.toLowerCase())
+                      (p.category || "").toLowerCase().includes(cat.toLowerCase())
                     ).length;
                     return (
                       <label
