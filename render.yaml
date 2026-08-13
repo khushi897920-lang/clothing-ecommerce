@@ -34,7 +34,7 @@ services:
       - key: RABBITMQ_URL
         value: amqps://placeholder-user:placeholder-pass@placeholder-host.rmq.cloudamqp.com/placeholder-vhost
       - key: CORS_ORIGIN
-        value: https://yugen-clothing.vercel.app
+        value: https://clothing-ecommerce-five-pi.vercel.app
 
 databases:
   # 3. PostgreSQL Database
